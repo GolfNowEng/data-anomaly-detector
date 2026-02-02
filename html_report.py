@@ -47,6 +47,7 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            scroll-behavior: smooth;
         }}
 
         body {{
@@ -83,6 +84,47 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
         .header .date {{
             font-size: 1.1em;
             opacity: 0.9;
+        }}
+
+        .nav {{
+            position: sticky;
+            top: 0;
+            background: white;
+            border-bottom: 2px solid #e9ecef;
+            padding: 15px 40px;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }}
+
+        .nav-title {{
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+
+        .nav-links {{
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }}
+
+        .nav-link {{
+            padding: 8px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 0.9em;
+            transition: all 0.2s;
+            display: inline-block;
+        }}
+
+        .nav-link:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }}
 
         .summary {{
@@ -264,6 +306,10 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
                 box-shadow: none;
             }}
 
+            .nav {{
+                display: none;
+            }}
+
             .summary-card:hover,
             .anomaly-table tbody tr:hover {{
                 transform: none;
@@ -277,6 +323,19 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
         <div class="header">
             <h1>🔍 Anomaly Analysis Report</h1>
             <div class="date">Generated on {report_date.strftime('%B %d, %Y at %I:%M %p')}</div>
+        </div>
+
+        <div class="nav">
+            <div class="nav-title">Quick Navigation</div>
+            <div class="nav-links">
+"""
+
+    # Add navigation links for each query
+    for query_name in anomalies_by_query.keys():
+        html += f"""                <a href="#query-{query_name}" class="nav-link">{query_name}</a>
+"""
+
+    html += """            </div>
         </div>
 
         <div class="summary">
@@ -314,7 +373,7 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
         moderate_count = sum(1 for a in anomalies if -95 <= a['pct_diff'] < -85)
         mild_count = len(anomalies) - severe_count - moderate_count
 
-        html += f"""            <div class="query-section">
+        html += f"""            <div class="query-section" id="query-{query_name}">
                 <div class="query-header">
                     <h2>{query_name}</h2>
                     <div class="description">{query_desc}</div>
