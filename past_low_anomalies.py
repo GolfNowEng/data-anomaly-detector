@@ -14,8 +14,21 @@ from query_loader import load_queries
 
 
 def parse_date(date_str):
-    """Parse date string in YYYYMMDD format."""
-    return datetime.strptime(date_str, '%Y%m%d')
+    """Parse date string in multiple formats."""
+    # Try YYYYMMDD format first (e.g., '20240101')
+    try:
+        return datetime.strptime(date_str, '%Y%m%d')
+    except ValueError:
+        pass
+
+    # Try YYYY-MM-DD format (e.g., '2024-01-01')
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        pass
+
+    # If both fail, raise error
+    raise ValueError(f"Unable to parse date: {date_str}. Expected format: YYYYMMDD or YYYY-MM-DD")
 
 
 def get_day_name(date_obj):
@@ -67,7 +80,7 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
                 day_name = get_day_name(date_obj)
                 data.append({
                     'date': date_obj,
-                    'date_str': row['playdatekey'],
+                    'date_str': date_obj.strftime('%Y%m%d'),  # Normalize to YYYYMMDD format
                     'count': count,
                     'day_name': day_name
                 })

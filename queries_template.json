@@ -27,6 +27,19 @@
       "anomaly_threshold_min": 5000
     },
     {
+      "name": "ezlinks_customers",
+      "description": "EZ Links new customers created daily (sourcesystemkey = 34)",
+      "csv_file": "working-dir/ezlinks_customers.csv",
+      "date_column": "CustomerCreatedDate",
+      "count_column": "customer_count",
+      "base_query": "SELECT CustomerCreatedDate, COUNT(customerKey) as customer_count FROM dbo.DimCustomer WHERE sourcesystemkey = 34 GROUP BY CustomerCreatedDate",
+      "filtered_query": "SELECT CustomerCreatedDate, COUNT(customerKey) as customer_count FROM dbo.DimCustomer WHERE sourcesystemkey = 34 AND {where_clause} GROUP BY CustomerCreatedDate",
+      "max_date_query": "SELECT MAX(CustomerCreatedDate) FROM dbo.DimCustomer WHERE sourcesystemkey = 34",
+      "order_by": "ORDER BY CustomerCreatedDate",
+      "anomaly_threshold_z": -2.5,
+      "anomaly_threshold_min": 10
+    },
+    {
       "name": "total_rounds",
       "description": "Total rounds played daily (all sources)",
       "csv_file": "working-dir/total_rounds.csv",
