@@ -125,7 +125,20 @@ python3 update_and_analyze.py --start-date 20240101 --end-date 20241231
 python3 update_and_analyze.py --start-date 20240101 --refresh
 ```
 
+**Process specific query only:**
+```bash
+# Update only the ezlinks_rounds query
+python3 update_and_analyze.py --query ezlinks_rounds
+
+# Update multiple specific queries
+python3 update_and_analyze.py --query query1 --query query2
+
+# Combine with date filters
+python3 update_and_analyze.py --query ezlinks_rounds --start-date 20240101
+```
+
 **Command-line options:**
+- `--query NAME` - Query name to process (can be specified multiple times, default: all queries)
 - `--start-date YYYYMMDD` - Start date filter (e.g., 20240101)
 - `--end-date YYYYMMDD` - End date filter (e.g., 20241231)
 - `--refresh` - Force full refresh (replace CSV instead of append)
@@ -136,9 +149,28 @@ python3 update_and_analyze.py --start-date 20240101 --refresh
 - **Full refresh**: Replaces entire CSV with fresh data from database (use with `--refresh` flag)
 
 ### Run Anomaly Analysis Only
+
+**Console output:**
 ```bash
 python3 past_low_anomalies.py
 ```
+
+**Generate HTML report:**
+```bash
+# Generate styled HTML report (default: anomaly_report.html)
+python3 past_low_anomalies.py --html
+
+# Specify custom output filename
+python3 past_low_anomalies.py --html --output my_report.html
+```
+
+The HTML report includes:
+- Executive summary with total anomalies across all queries
+- Color-coded severity indicators (severe/moderate/mild)
+- Interactive tables grouped by query and month
+- Professional styling with gradient headers
+- Print-friendly layout
+
 Analyzes existing CSV files in `working-dir/` without updating from database.
 
 ### Test Query Configuration

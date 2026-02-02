@@ -5,6 +5,8 @@ Generate a list of LOW anomalies from the PAST only across multiple queries.
 
 import csv
 import os
+import sys
+import argparse
 from datetime import datetime
 from collections import defaultdict
 import statistics
@@ -29,7 +31,7 @@ def calculate_z_score(value, mean, std_dev):
 
 
 def analyze_csv(csv_file, query_name, date_column, count_column,
-                threshold_z=-2.5, threshold_min=5000, today=None):
+                threshold_z=-2.5, threshold_min=5000, today=None, query_description=""):
     """
     Analyze a single CSV file for anomalies.
 
@@ -41,6 +43,7 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
         threshold_z: Z-score threshold for anomaly detection
         threshold_min: Minimum count threshold
         today: Current date (for filtering future dates)
+        query_description: Description of the query
 
     Returns:
         List of anomaly dictionaries
@@ -107,6 +110,7 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
             past_low_anomalies.append({
                 **entry,
                 'query_name': query_name,
+                'query_description': query_description,
                 'z_score': z_score,
                 'expected': stats['mean'],
                 'pct_diff': ((count - stats['mean']) / stats['mean']) * 100 if stats['mean'] != 0 else 0
@@ -149,6 +153,29 @@ def print_anomalies(anomalies, query_name, query_description):
 
 def main():
     """Run anomaly analysis on all queries."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description='Analyze CSV files for past low anomalies',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Console output only
+  python3 past_low_anomalies.py
+
+  # Generate HTML report
+  python3 past_low_anomalies.py --html
+
+  # Generate HTML report with custom filename
+  python3 past_low_anomalies.py --html --output my_report.html
+        """
+    )
+    parser.add_argument('--html', action='store_true',
+                       help='Generate HTML report')
+    parser.add_argument('--output', '-o', type=str, default='anomaly_report.html',
+                       help='HTML output filename (default: anomaly_report.html)')
+
+    args = parser.parse_args()
+
     # Today's date
     TODAY = datetime(2026, 2, 2)
 
@@ -160,6 +187,7 @@ def main():
         return 1
 
     all_anomalies = []
+    anomalies_by_query = {}
 
     # Process each query
     for query in queries:
@@ -177,13 +205,15 @@ def main():
             query['count_column'],
             query.get('anomaly_threshold_z', -2.5),
             query.get('anomaly_threshold_min', 5000),
-            TODAY
+            TODAY,
+            query.get('description', query['name'])
         )
 
         # Print anomalies for this query
         print_anomalies(anomalies, query['name'], query['description'])
 
         all_anomalies.extend(anomalies)
+        anomalies_by_query[query['name']] = anomalies
 
     # Summary
     print(f"\n{'='*80}")
@@ -199,6 +229,16 @@ def main():
         print(f"  {query_name}: {count}")
 
     print(f"{'='*80}")
+
+    # Generate HTML report if requested
+    if args.html:
+        try:
+            from html_report import generate_html_report
+            output_file = generate_html_report(anomalies_by_query, args.output)
+            print(f"\n✓ HTML report generated: {output_file}")
+        except Exception as e:
+            print(f"\n✗ Error generating HTML report: {e}")
+            return 1
 
     return 0
 

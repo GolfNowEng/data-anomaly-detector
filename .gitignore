@@ -31,6 +31,10 @@ queries.json
 working-dir/
 working-dir/*.csv
 
+# Generated reports
+*.html
+anomaly_report*.html
+
 # IDE
 .vscode/
 .idea/

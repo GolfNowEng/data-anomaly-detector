@@ -13,7 +13,8 @@ def update_and_analyze(server: str, database: str,
                       use_windows_auth: bool = True,
                       username: str = None, password: str = None,
                       start_date: str = None, end_date: str = None,
-                      force_refresh: bool = False):
+                      force_refresh: bool = False,
+                      query_names: list = None):
     """
     Pull latest data from database for all queries and run anomaly analysis.
 
@@ -26,13 +27,31 @@ def update_and_analyze(server: str, database: str,
         start_date: Optional start date filter (YYYYMMDD format)
         end_date: Optional end date filter (YYYYMMDD format)
         force_refresh: Force full refresh instead of incremental update
+        query_names: Optional list of query names to process (default: all queries)
     """
     # Load queries from JSON
     try:
-        queries = load_queries("queries.json")
+        all_queries = load_queries("queries.json")
     except Exception as e:
         print(f"ERROR: Failed to load queries: {e}")
         return False
+
+    # Filter queries if specific names were provided
+    if query_names:
+        queries = [q for q in all_queries if q['name'] in query_names]
+        if not queries:
+            print(f"ERROR: No queries found matching: {', '.join(query_names)}")
+            print(f"Available queries: {', '.join([q['name'] for q in all_queries])}")
+            return False
+
+        # Check for invalid query names
+        found_names = [q['name'] for q in queries]
+        invalid_names = [name for name in query_names if name not in found_names]
+        if invalid_names:
+            print(f"WARNING: Query names not found: {', '.join(invalid_names)}")
+            print(f"Available queries: {', '.join([q['name'] for q in all_queries])}")
+    else:
+        queries = all_queries
 
     print("=" * 80)
     print("UPDATING DATA FROM DATABASE")
@@ -123,19 +142,27 @@ if __name__ == '__main__':
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Incremental update (default)
+  # Incremental update (all queries)
   python3 update_and_analyze.py
+
+  # Update specific query only
+  python3 update_and_analyze.py --query ezlinks_rounds
+
+  # Update multiple specific queries
+  python3 update_and_analyze.py --query query1 --query query2
 
   # Get data from 2024 onwards
   python3 update_and_analyze.py --start-date 20240101
 
-  # Get data for specific date range
-  python3 update_and_analyze.py --start-date 20240101 --end-date 20241231
+  # Get data for specific date range with specific query
+  python3 update_and_analyze.py --query ezlinks_rounds --start-date 20240101 --end-date 20241231
 
   # Full refresh with date filter
   python3 update_and_analyze.py --start-date 20240101 --refresh
         """
     )
+    parser.add_argument('--query', action='append', dest='queries', metavar='NAME',
+                       help='Query name to process (can be specified multiple times, default: all queries)')
     parser.add_argument('--start-date', type=str, metavar='YYYYMMDD',
                        help='Start date filter (e.g., 20240101)')
     parser.add_argument('--end-date', type=str, metavar='YYYYMMDD',
@@ -167,7 +194,8 @@ Examples:
             password=PASSWORD,
             start_date=args.start_date,
             end_date=args.end_date,
-            force_refresh=args.refresh
+            force_refresh=args.refresh,
+            query_names=args.queries
         )
 
     except ImportError:
