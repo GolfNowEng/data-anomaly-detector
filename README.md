@@ -1,6 +1,14 @@
 # EZ Links Rounds Data Analysis
 
-Python tools for querying SQL Server database and analyzing ezlrounds data for anomalies.
+Python tools for querying SQL Server database and analyzing ezlrounds data for anomalies. The system pulls rounds data from SQL Server, maintains CSV caches, and performs statistical anomaly detection based on day-of-week patterns.
+
+## Features
+
+- **Multi-query support**: Define multiple SQL queries to track different data dimensions
+- **CSV-based caching**: Intelligent incremental updates (append only new records)
+- **Day-of-week statistics**: Anomaly detection considers weekday patterns
+- **Flexible SQL queries**: Support for JOINs, GROUP BY, complex filters
+- **Consolidated reporting**: Analyze anomalies across all queries simultaneously
 
 ## Setup
 
@@ -17,165 +25,281 @@ Python tools for querying SQL Server database and analyzing ezlrounds data for a
 3. **Configure database connection:**
    ```bash
    cp config_template.py config.py
-   # Edit config.py with your database details
+   # Edit config.py with your database credentials
    ```
 
-## Usage
-
-### Option 1: Update CSV and Run Analysis
-```bash
-python3 update_and_analyze.py
-```
-This will:
-1. Connect to your SQL Server database
-2. Pull new data since the last CSV update
-3. Run anomaly analysis on the updated data
-
-### Option 2: Use the Database Module Directly
-```python
-from db_query import EZLinksRoundsDB
-
-# Connect to database
-db = EZLinksRoundsDB("server-name", "database-name", use_windows_auth=True)
-
-try:
-    if db.connect():
-        # Update existing CSV with new data
-        db.update_csv("table-name")
-
-        # Or refresh entire CSV
-        # db.refresh_full_csv("table-name")
-
-        # Or query specific date range
-        data = db.query_rounds_data(
-            "table-name",
-            start_date="20240101",
-            end_date="20240131"
-        )
-finally:
-    db.disconnect()
-```
-
-### Option 3: Run Anomaly Analysis Only
-```bash
-python3 past_low_anomalies.py
-```
-Analyzes the existing `ezlrounds.csv` file for anomalies.
-
-## Files
-
-- **db_query.py** - Database connection and query module
-- **past_low_anomalies.py** - Anomaly detection script (past low values only)
-- **analyze_anomalies.py** - Full anomaly detection with statistics
-- **update_and_analyze.py** - Combined script to update data and analyze
-- **config_template.py** - Template for database configuration
-- **requirements.txt** - Python dependencies
-
-## Database Methods
-
-### `connect()`
-Establish connection to SQL Server database.
-
-### `query_rounds_data(table_name, date_column, count_column, start_date, end_date)`
-Query rounds data with optional date filtering.
-
-### `update_csv(table_name, csv_file)`
-Intelligently update CSV by appending only new records since the last date in the CSV.
-
-### `refresh_full_csv(table_name, csv_file)`
-Replace CSV with all data from database.
-
-### `get_latest_date(table_name, date_column)`
-Get the most recent date in the database.
+4. **Configure queries:**
+   ```bash
+   cp queries_template.json queries.json
+   # Edit queries.json with your SQL queries and table details
+   ```
 
 ## Configuration
 
-Update `config.py` with your database details:
+### config.py - Database Credentials
+
+Contains only database connection settings:
 
 ```python
 SERVER = "your-server.database.windows.net"
 DATABASE = "your-database-name"
-TABLE = "your-table-name"
-DATE_COLUMN = "playdatekey"
-COUNT_COLUMN = "count"
 USE_WINDOWS_AUTH = True  # or False for SQL auth
+USERNAME = "your-username"  # if USE_WINDOWS_AUTH = False
+PASSWORD = "your-password"  # if USE_WINDOWS_AUTH = False
 ```
 
-### Custom SQL Queries
+### queries.json - Query Definitions
 
-You can customize the SQL queries in `config.py` to handle complex schemas, JOINs, or additional filtering:
+Defines one or more SQL queries to analyze. Each query maintains its own CSV cache in `working-dir/`:
 
+```json
+{
+  "queries": [
+    {
+      "name": "total_rounds",
+      "description": "Total rounds played daily",
+      "csv_file": "working-dir/ezlrounds.csv",
+      "date_column": "playdatekey",
+      "count_column": "count",
+      "base_query": "SELECT {date_column}, {count_column} FROM {table}",
+      "filtered_query": "SELECT {date_column}, {count_column} FROM {table} WHERE {where_clause}",
+      "max_date_query": "SELECT MAX({date_column}) FROM {table}",
+      "order_by": "ORDER BY {date_column}",
+      "anomaly_threshold_z": -2.5,
+      "anomaly_threshold_min": 5000
+    }
+  ]
+}
+```
+
+**Required fields:**
+- `name`: Unique query identifier
+- `csv_file`: Path to CSV cache file (in working-dir/)
+- `date_column`: Column containing date (YYYYMMDD format)
+- `count_column`: Column containing count value
+
+**Optional fields:**
+- `description`: Human-readable description (defaults to name)
+- `base_query`: Custom SQL query template
+- `filtered_query`: Query template with {where_clause} placeholder
+- `max_date_query`: Query to get latest date
+- `order_by`: ORDER BY clause
+- `anomaly_threshold_z`: Z-score threshold (default: -2.5)
+- `anomaly_threshold_min`: Minimum count threshold (default: 5000)
+
+**Query placeholders:**
+- `{date_column}` - Date column name
+- `{count_column}` - Count column name
+- `{where_clause}` - Auto-generated date filters (for filtered_query)
+
+## Usage
+
+### Main Workflow: Update and Analyze
+```bash
+python3 update_and_analyze.py
+```
+This will:
+1. Connect to SQL Server database
+2. Process all queries defined in queries.json
+3. Update each CSV with new data since last run
+4. Run anomaly analysis across all queries
+5. Display consolidated report grouped by query
+
+### Run Anomaly Analysis Only
+```bash
+python3 past_low_anomalies.py
+```
+Analyzes existing CSV files in `working-dir/` without updating from database.
+
+### Test Query Configuration
+```bash
+python3 query_loader.py
+```
+Validates queries.json and displays loaded configuration.
+
+### Use Database Module Directly
 ```python
-# Example: Simple query (default behavior if not specified)
-BASE_QUERY = """
-SELECT {date_column}, {count_column}
-FROM {table}
-"""
+from db_query import EZLinksRoundsDB
+from query_loader import load_queries
 
-# Example: Query with JOIN
-BASE_QUERY = """
-SELECT r.{date_column}, SUM(r.{count_column}) as {count_column}
-FROM {table} r
-INNER JOIN courses c ON r.course_id = c.id
-WHERE c.active = 1
-GROUP BY r.{date_column}
-"""
+# Load queries
+queries = load_queries("queries.json")
 
-# Example: Query with additional filtering
-FILTERED_QUERY = """
-SELECT {date_column}, {count_column}
-FROM {table}
-WHERE {where_clause}
-  AND status = 'completed'
-"""
+# Connect to database
+db = EZLinksRoundsDB("server", "database", use_windows_auth=True)
 
-# Example: Custom ORDER BY
-ORDER_BY = "ORDER BY {date_column} DESC"
-
-# Example: Custom MAX query
-MAX_DATE_QUERY = """
-SELECT MAX({date_column})
-FROM {table}
-WHERE status = 'completed'
-"""
+try:
+    if db.connect():
+        # Update CSV for each query
+        for query in queries:
+            db.update_csv(
+                table_name="N/A",
+                csv_file=query['csv_file'],
+                date_column=query['date_column'],
+                count_column=query['count_column'],
+                base_query=query['base_query'],
+                filtered_query=query['filtered_query'],
+                order_by=query['order_by'],
+                max_date_query=query['max_date_query']
+            )
+finally:
+    db.disconnect()
 ```
 
-**Available placeholders:**
-- `{date_column}` - Date column name from config
-- `{count_column}` - Count column name from config
-- `{table}` - Table name from config
-- `{where_clause}` - Auto-generated WHERE clause for date filtering
+## Query Examples
 
-**Note:** If you don't specify custom queries in config, the default queries will be used.
+### Simple Query
+```json
+{
+  "name": "daily_rounds",
+  "description": "Daily round counts",
+  "csv_file": "working-dir/rounds.csv",
+  "date_column": "playdatekey",
+  "count_column": "rounds",
+  "base_query": "SELECT playdatekey, COUNT(*) as rounds FROM bookings GROUP BY playdatekey",
+  "filtered_query": "SELECT playdatekey, COUNT(*) as rounds FROM bookings WHERE {where_clause} GROUP BY playdatekey",
+  "max_date_query": "SELECT MAX(playdatekey) FROM bookings",
+  "order_by": "ORDER BY playdatekey"
+}
+```
+
+### Complex Query with JOIN
+```json
+{
+  "name": "rounds_by_membership",
+  "description": "Rounds by membership tier",
+  "csv_file": "working-dir/membership_rounds.csv",
+  "date_column": "play_date",
+  "count_column": "round_count",
+  "base_query": "SELECT r.play_date, COUNT(*) as round_count FROM rounds r INNER JOIN members m ON r.member_id = m.id WHERE m.tier = 'premium' GROUP BY r.play_date",
+  "filtered_query": "SELECT r.play_date, COUNT(*) as round_count FROM rounds r INNER JOIN members m ON r.member_id = m.id WHERE m.tier = 'premium' AND {where_clause} GROUP BY r.play_date",
+  "max_date_query": "SELECT MAX(play_date) FROM rounds",
+  "order_by": "ORDER BY play_date",
+  "anomaly_threshold_z": -2.0,
+  "anomaly_threshold_min": 1000
+}
+```
+
+### Aggregated Query
+```json
+{
+  "name": "revenue_by_date",
+  "description": "Total revenue per day",
+  "csv_file": "working-dir/revenue.csv",
+  "date_column": "transaction_date",
+  "count_column": "total_revenue",
+  "base_query": "SELECT transaction_date, SUM(amount) as total_revenue FROM transactions WHERE status = 'completed' GROUP BY transaction_date",
+  "filtered_query": "SELECT transaction_date, SUM(amount) as total_revenue FROM transactions WHERE status = 'completed' AND {where_clause} GROUP BY transaction_date",
+  "max_date_query": "SELECT MAX(transaction_date) FROM transactions WHERE status = 'completed'",
+  "order_by": "ORDER BY transaction_date"
+}
+```
+
+## Architecture
+
+### Core Components
+
+1. **config.py** - Database credentials only
+2. **queries.json** - Query definitions (gitignored)
+3. **query_loader.py** - Loads and validates queries
+4. **db_query.py** - Database abstraction layer (EZLinksRoundsDB class)
+5. **update_and_analyze.py** - Orchestration script
+6. **past_low_anomalies.py** - Anomaly detection engine
+7. **working-dir/** - CSV cache directory (gitignored)
+
+### Data Flow
+```
+config.py → Database credentials
+queries.json → Query definitions
+    ↓
+query_loader.py → Validates and loads queries
+    ↓
+db_query.py → Executes SQL queries
+    ↓
+working-dir/*.csv → CSV caches (one per query)
+    ↓
+past_low_anomalies.py → Anomaly detection
+    ↓
+Consolidated report grouped by query
+```
+
+## Files
+
+- **config_template.py** - Template for database configuration
+- **config.py** - Actual database credentials (gitignored)
+- **queries_template.json** - Template for query definitions
+- **queries.json** - Actual query definitions (gitignored)
+- **query_loader.py** - Query configuration loader
+- **db_query.py** - Database connection and query module
+- **update_and_analyze.py** - Update data and run analysis
+- **past_low_anomalies.py** - Anomaly detection script (past low values only)
+- **requirements.txt** - Python dependencies
+- **working-dir/** - CSV cache directory (gitignored)
+
+## Anomaly Detection
+
+The analysis identifies days with abnormally low counts by:
+
+1. **Day-of-week grouping**: Groups historical data by day of week (Monday, Tuesday, etc.)
+2. **Statistical baseline**: Calculates mean and standard deviation for each day of week
+3. **Z-score calculation**: Computes z-score for each day against its day-of-week baseline
+4. **Threshold detection**: Flags anomalies using two criteria:
+   - Z-score < threshold (default: -2.5)
+   - OR count < minimum threshold (default: 5000)
+5. **Past-only filtering**: Only analyzes dates before TODAY constant (excludes future dates)
+
+### Why day-of-week statistics?
+Golf rounds typically follow weekly patterns (higher on weekends, lower on weekdays). Comparing each day against its specific day-of-week history provides more accurate anomaly detection than comparing against overall averages.
+
+## Multi-Query Benefits
+
+- **Multiple perspectives**: Track different data dimensions simultaneously (e.g., total rounds, rounds by course, rounds by membership tier)
+- **Separate thresholds**: Each query can have custom z-score and minimum count thresholds
+- **Independent caching**: Each query maintains its own CSV cache for efficient updates
+- **Consolidated reporting**: Single analysis run produces comprehensive anomaly report across all queries
 
 ## Authentication Options
 
 **Windows Authentication** (default):
 ```python
-db = EZLinksRoundsDB(server, database, use_windows_auth=True)
+USE_WINDOWS_AUTH = True
 ```
 
 **SQL Server Authentication**:
 ```python
-db = EZLinksRoundsDB(server, database,
-                     username="user",
-                     password="pass",
-                     use_windows_auth=False)
+USE_WINDOWS_AUTH = False
+USERNAME = "your-username"
+PASSWORD = "your-password"
 ```
 
-## Anomaly Detection
+## Troubleshooting
 
-The analysis identifies days with abnormally low counts by:
-1. Calculating expected counts for each day of week
-2. Computing z-scores for each day
-3. Flagging days with z-score < -2.5 or count < 5000
-4. Considering day-of-week patterns (weekends typically have higher counts)
+**Error: queries.json not found**
+```bash
+cp queries_template.json queries.json
+# Edit queries.json with your query definitions
+```
+
+**Error: config.py not found**
+```bash
+cp config_template.py config.py
+# Edit config.py with your database credentials
+```
+
+**CSV files not found**
+- The system creates `working-dir/` automatically
+- CSV files are created on first run
+- Check that queries.json has correct csv_file paths
+
+**Connection errors**
+- Verify SERVER and DATABASE in config.py
+- Check firewall allows SQL Server port (default: 1433)
+- Ensure ODBC driver is installed correctly
 
 ## Next Steps
 
-Once configured, please provide:
-1. Your SQL Server hostname/IP
-2. Database name
-3. Table name
-4. Column names (if different from "playdatekey" and "count")
-5. Authentication method preference
+1. Copy config_template.py to config.py and add your database credentials
+2. Copy queries_template.json to queries.json and define your queries
+3. Run `python3 update_and_analyze.py` to test the system
+4. Add more queries to queries.json as needed for different data dimensions
+5. Adjust anomaly thresholds per query based on your data patterns

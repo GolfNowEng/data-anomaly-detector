@@ -1,62 +1,69 @@
 #!/usr/bin/env python3
 """
-Update data from database and run anomaly analysis.
+Update data from database and run anomaly analysis across multiple queries.
 """
 
 import sys
 from db_query import EZLinksRoundsDB
-from past_low_anomalies import *  # Import the analysis functions
+from query_loader import load_queries
 
 
-def update_and_analyze(server: str, database: str, table: str,
-                      date_column: str = "playdatekey",
-                      count_column: str = "count",
+def update_and_analyze(server: str, database: str,
                       use_windows_auth: bool = True,
-                      username: str = None, password: str = None,
-                      base_query: str = None,
-                      filtered_query: str = None,
-                      order_by: str = None,
-                      max_date_query: str = None):
+                      username: str = None, password: str = None):
     """
-    Pull latest data from database and run anomaly analysis.
+    Pull latest data from database for all queries and run anomaly analysis.
 
     Args:
         server: SQL Server hostname
         database: Database name
-        table: Table name
-        date_column: Date column name
-        count_column: Count column name
         use_windows_auth: Use Windows authentication
         username: SQL Server username (if not using Windows auth)
         password: SQL Server password (if not using Windows auth)
-        base_query: Optional custom SQL query template
-        filtered_query: Optional custom SQL query with WHERE clause
-        order_by: Optional ORDER BY clause
-        max_date_query: Optional custom MAX query
     """
+    # Load queries from JSON
+    try:
+        queries = load_queries("queries.json")
+    except Exception as e:
+        print(f"ERROR: Failed to load queries: {e}")
+        return False
+
     print("=" * 80)
     print("UPDATING DATA FROM DATABASE")
     print("=" * 80)
+    print(f"Loaded {len(queries)} queries:")
+    for query in queries:
+        print(f"  - {query['name']}: {query['description']}")
+    print()
 
-    # Connect to database
+    # Connect to database once
     db = EZLinksRoundsDB(server, database, username, password, use_windows_auth)
 
     try:
-        if db.connect():
-            # Update CSV with latest data
-            db.update_csv(
-                table,
-                date_column=date_column,
-                count_column=count_column,
-                base_query=base_query,
-                filtered_query=filtered_query,
-                order_by=order_by,
-                max_date_query=max_date_query
-            )
-            print("\nCSV file updated successfully!")
-        else:
+        if not db.connect():
             print("Failed to connect to database")
             return False
+
+        # Process each query
+        for i, query in enumerate(queries, 1):
+            print(f"\n[{i}/{len(queries)}] Processing query: {query['name']}")
+            print("-" * 80)
+
+            db.update_csv(
+                table_name="N/A",  # Not used when base_query is provided
+                csv_file=query['csv_file'],
+                date_column=query['date_column'],
+                count_column=query['count_column'],
+                base_query=query.get('base_query'),
+                filtered_query=query.get('filtered_query'),
+                order_by=query.get('order_by'),
+                max_date_query=query.get('max_date_query')
+            )
+
+        print("\n" + "=" * 80)
+        print("CSV files updated successfully!")
+        print("=" * 80)
+
     finally:
         db.disconnect()
 
@@ -84,41 +91,21 @@ if __name__ == '__main__':
         import config
         SERVER = config.SERVER
         DATABASE = config.DATABASE
-        TABLE = getattr(config, 'TABLE', None)  # Optional since queries are hardcoded
-        DATE_COLUMN = getattr(config, 'DATE_COLUMN', 'playdatekey')
-        COUNT_COLUMN = getattr(config, 'COUNT_COLUMN', 'count')
         USE_WINDOWS_AUTH = config.USE_WINDOWS_AUTH
         USERNAME = getattr(config, 'USERNAME', None)
         PASSWORD = getattr(config, 'PASSWORD', None)
 
-        # Load query templates from config
-        BASE_QUERY = getattr(config, 'BASE_QUERY', None)
-        FILTERED_QUERY = getattr(config, 'FILTERED_QUERY', None)
-        ORDER_BY = getattr(config, 'ORDER_BY', None)
-        MAX_DATE_QUERY = getattr(config, 'MAX_DATE_QUERY', None)
-
         print(f"Loaded configuration:")
         print(f"  Server: {SERVER}")
         print(f"  Database: {DATABASE}")
-        if TABLE:
-            print(f"  Table: {TABLE}")
-        print(f"  Date Column: {DATE_COLUMN}")
-        print(f"  Count Column: {COUNT_COLUMN}")
         print(f"  Auth: {'Windows' if USE_WINDOWS_AUTH else 'SQL Server'}")
-        print(f"  Custom Queries: {'Yes' if BASE_QUERY else 'No'}")
         print()
 
         success = update_and_analyze(
-            SERVER, DATABASE, TABLE or "N/A",
-            date_column=DATE_COLUMN,
-            count_column=COUNT_COLUMN,
+            SERVER, DATABASE,
             use_windows_auth=USE_WINDOWS_AUTH,
             username=USERNAME,
-            password=PASSWORD,
-            base_query=BASE_QUERY,
-            filtered_query=FILTERED_QUERY,
-            order_by=ORDER_BY,
-            max_date_query=MAX_DATE_QUERY
+            password=PASSWORD
         )
 
     except ImportError:

@@ -25,6 +25,11 @@ wheels/
 
 # Configuration files with credentials
 config.py
+queries.json
+
+# Working directory with CSV data files
+working-dir/
+working-dir/*.csv
 
 # IDE
 .vscode/

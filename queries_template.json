@@ -1,0 +1,30 @@
+{
+  "queries": [
+    {
+      "name": "total_rounds",
+      "description": "Total rounds played daily",
+      "csv_file": "working-dir/ezlrounds.csv",
+      "date_column": "playdatekey",
+      "count_column": "count",
+      "base_query": "SELECT {date_column}, {count_column} FROM {table}",
+      "filtered_query": "SELECT {date_column}, {count_column} FROM {table} WHERE {where_clause}",
+      "max_date_query": "SELECT MAX({date_column}) FROM {table}",
+      "order_by": "ORDER BY {date_column}",
+      "anomaly_threshold_z": -2.5,
+      "anomaly_threshold_min": 5000
+    },
+    {
+      "name": "rounds_by_course",
+      "description": "Rounds aggregated by golf course",
+      "csv_file": "working-dir/rounds_by_course.csv",
+      "date_column": "play_date",
+      "count_column": "round_count",
+      "base_query": "SELECT {date_column}, SUM({count_column}) as {count_column} FROM courses GROUP BY {date_column}",
+      "filtered_query": "SELECT {date_column}, SUM({count_column}) as {count_column} FROM courses WHERE {where_clause} GROUP BY {date_column}",
+      "max_date_query": "SELECT MAX({date_column}) FROM courses",
+      "order_by": "ORDER BY {date_column}",
+      "anomaly_threshold_z": -2.0,
+      "anomaly_threshold_min": 1000
+    }
+  ]
+}
