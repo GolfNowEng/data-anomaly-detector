@@ -95,15 +95,45 @@ Defines one or more SQL queries to analyze. Each query maintains its own CSV cac
 ## Usage
 
 ### Main Workflow: Update and Analyze
+
+**Basic incremental update:**
 ```bash
 python3 update_and_analyze.py
 ```
 This will:
 1. Connect to SQL Server database
 2. Process all queries defined in queries.json
-3. Update each CSV with new data since last run
+3. Update each CSV with new data since last run (incremental)
 4. Run anomaly analysis across all queries
 5. Display consolidated report grouped by query
+
+**Get data from a specific start date:**
+```bash
+# Get data from 2024 onwards (appends to existing CSV)
+python3 update_and_analyze.py --start-date 20240101
+```
+
+**Get data for a specific date range:**
+```bash
+# Get only 2024 data
+python3 update_and_analyze.py --start-date 20240101 --end-date 20241231
+```
+
+**Full refresh with date filter:**
+```bash
+# Replace CSV with data from 2024 onwards
+python3 update_and_analyze.py --start-date 20240101 --refresh
+```
+
+**Command-line options:**
+- `--start-date YYYYMMDD` - Start date filter (e.g., 20240101)
+- `--end-date YYYYMMDD` - End date filter (e.g., 20241231)
+- `--refresh` - Force full refresh (replace CSV instead of append)
+
+**Update modes:**
+- **Incremental (default)**: Appends new records to existing CSV starting from the latest date in the CSV
+- **Incremental with start date**: Appends new records starting from specified date (useful for backfilling)
+- **Full refresh**: Replaces entire CSV with fresh data from database (use with `--refresh` flag)
 
 ### Run Anomaly Analysis Only
 ```bash

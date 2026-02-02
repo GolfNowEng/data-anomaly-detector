@@ -4,13 +4,16 @@ Update data from database and run anomaly analysis across multiple queries.
 """
 
 import sys
+import argparse
 from db_query import EZLinksRoundsDB
 from query_loader import load_queries
 
 
 def update_and_analyze(server: str, database: str,
                       use_windows_auth: bool = True,
-                      username: str = None, password: str = None):
+                      username: str = None, password: str = None,
+                      start_date: str = None, end_date: str = None,
+                      force_refresh: bool = False):
     """
     Pull latest data from database for all queries and run anomaly analysis.
 
@@ -20,6 +23,9 @@ def update_and_analyze(server: str, database: str,
         use_windows_auth: Use Windows authentication
         username: SQL Server username (if not using Windows auth)
         password: SQL Server password (if not using Windows auth)
+        start_date: Optional start date filter (YYYYMMDD format)
+        end_date: Optional end date filter (YYYYMMDD format)
+        force_refresh: Force full refresh instead of incremental update
     """
     # Load queries from JSON
     try:
@@ -34,6 +40,14 @@ def update_and_analyze(server: str, database: str,
     print(f"Loaded {len(queries)} queries:")
     for query in queries:
         print(f"  - {query['name']}: {query['description']}")
+    if start_date:
+        print(f"\nDate filter: start_date >= {start_date}")
+    if end_date:
+        print(f"Date filter: end_date <= {end_date}")
+    if force_refresh:
+        print("\nMode: FULL REFRESH (will replace existing CSVs)")
+    else:
+        print("\nMode: INCREMENTAL UPDATE (will append new records)")
     print()
 
     # Connect to database once
@@ -49,16 +63,33 @@ def update_and_analyze(server: str, database: str,
             print(f"\n[{i}/{len(queries)}] Processing query: {query['name']}")
             print("-" * 80)
 
-            db.update_csv(
-                table_name="N/A",  # Not used when base_query is provided
-                csv_file=query['csv_file'],
-                date_column=query['date_column'],
-                count_column=query['count_column'],
-                base_query=query.get('base_query'),
-                filtered_query=query.get('filtered_query'),
-                order_by=query.get('order_by'),
-                max_date_query=query.get('max_date_query')
-            )
+            if force_refresh:
+                # Full refresh mode - replace entire CSV
+                db.refresh_full_csv(
+                    table_name="N/A",  # Not used when base_query is provided
+                    csv_file=query['csv_file'],
+                    date_column=query['date_column'],
+                    count_column=query['count_column'],
+                    base_query=query.get('base_query'),
+                    filtered_query=query.get('filtered_query'),
+                    order_by=query.get('order_by'),
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            else:
+                # Incremental update mode - append new records
+                db.update_csv(
+                    table_name="N/A",  # Not used when base_query is provided
+                    csv_file=query['csv_file'],
+                    date_column=query['date_column'],
+                    count_column=query['count_column'],
+                    base_query=query.get('base_query'),
+                    filtered_query=query.get('filtered_query'),
+                    order_by=query.get('order_by'),
+                    max_date_query=query.get('max_date_query'),
+                    force_start_date=start_date,
+                    end_date=end_date
+                )
 
         print("\n" + "=" * 80)
         print("CSV files updated successfully!")
@@ -86,6 +117,34 @@ def update_and_analyze(server: str, database: str,
 
 
 if __name__ == '__main__':
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description='Update data from SQL Server and run anomaly analysis',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Incremental update (default)
+  python3 update_and_analyze.py
+
+  # Get data from 2024 onwards
+  python3 update_and_analyze.py --start-date 20240101
+
+  # Get data for specific date range
+  python3 update_and_analyze.py --start-date 20240101 --end-date 20241231
+
+  # Full refresh with date filter
+  python3 update_and_analyze.py --start-date 20240101 --refresh
+        """
+    )
+    parser.add_argument('--start-date', type=str, metavar='YYYYMMDD',
+                       help='Start date filter (e.g., 20240101)')
+    parser.add_argument('--end-date', type=str, metavar='YYYYMMDD',
+                       help='End date filter (e.g., 20241231)')
+    parser.add_argument('--refresh', action='store_true',
+                       help='Force full refresh (replace CSV instead of append)')
+
+    args = parser.parse_args()
+
     # Try to load config file
     try:
         import config
@@ -105,7 +164,10 @@ if __name__ == '__main__':
             SERVER, DATABASE,
             use_windows_auth=USE_WINDOWS_AUTH,
             username=USERNAME,
-            password=PASSWORD
+            password=PASSWORD,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            force_refresh=args.refresh
         )
 
     except ImportError:

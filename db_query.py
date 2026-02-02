@@ -208,7 +208,8 @@ class EZLinksRoundsDB:
     def update_csv(self, table_name: str, csv_file: str = "ezlrounds.csv",
                    date_column: str = "playdatekey", count_column: str = "count",
                    base_query: Optional[str] = None, filtered_query: Optional[str] = None,
-                   order_by: Optional[str] = None, max_date_query: Optional[str] = None):
+                   order_by: Optional[str] = None, max_date_query: Optional[str] = None,
+                   force_start_date: Optional[str] = None, end_date: Optional[str] = None):
         """
         Update CSV file with new data from database.
 
@@ -221,6 +222,8 @@ class EZLinksRoundsDB:
             filtered_query: Optional custom SQL query with WHERE clause (from config)
             order_by: Optional ORDER BY clause (from config)
             max_date_query: Optional custom MAX query (from config)
+            force_start_date: Optional forced start date (overrides CSV date)
+            end_date: Optional end date filter
         """
         # Read existing CSV to find latest date
         latest_csv_date = None
@@ -233,23 +236,34 @@ class EZLinksRoundsDB:
         except FileNotFoundError:
             print(f"CSV file not found, will create new file")
 
+        # Determine start date to use
+        if force_start_date:
+            start_date = force_start_date
+            print(f"Using forced start date: {start_date}")
+        elif latest_csv_date:
+            start_date = latest_csv_date
+        else:
+            start_date = None
+
         # Query database for new data
-        if latest_csv_date:
-            # Get data after the latest CSV date
+        if start_date:
+            # Get data after the start date
             data = self.query_rounds_data(
                 table_name, date_column, count_column,
-                start_date=latest_csv_date,
+                start_date=start_date,
+                end_date=end_date,
                 base_query=base_query,
                 filtered_query=filtered_query,
                 order_by=order_by
             )
-            # Remove the duplicate date if it exists
-            if data and data[0]['playdatekey'] == latest_csv_date:
+            # Remove the duplicate date if it exists (only if not forced)
+            if not force_start_date and data and data[0]['playdatekey'] == start_date:
                 data = data[1:]
         else:
             # Get all data
             data = self.query_rounds_data(
                 table_name, date_column, count_column,
+                end_date=end_date,
                 base_query=base_query,
                 filtered_query=filtered_query,
                 order_by=order_by
@@ -261,7 +275,7 @@ class EZLinksRoundsDB:
 
         # Append to existing CSV or create new
         try:
-            if latest_csv_date:
+            if latest_csv_date and not force_start_date:
                 # Append mode
                 with open(csv_file, 'a', newline='') as f:
                     writer = csv.DictWriter(f, fieldnames=['playdatekey', 'count'])
@@ -277,7 +291,8 @@ class EZLinksRoundsDB:
     def refresh_full_csv(self, table_name: str, csv_file: str = "ezlrounds.csv",
                         date_column: str = "playdatekey", count_column: str = "count",
                         base_query: Optional[str] = None, filtered_query: Optional[str] = None,
-                        order_by: Optional[str] = None):
+                        order_by: Optional[str] = None,
+                        start_date: Optional[str] = None, end_date: Optional[str] = None):
         """
         Refresh the entire CSV file with all data from database.
 
@@ -289,10 +304,14 @@ class EZLinksRoundsDB:
             base_query: Optional custom SQL query template (from config)
             filtered_query: Optional custom SQL query with WHERE clause (from config)
             order_by: Optional ORDER BY clause (from config)
+            start_date: Optional start date filter
+            end_date: Optional end date filter
         """
         print("Refreshing full CSV from database...")
         data = self.query_rounds_data(
             table_name, date_column, count_column,
+            start_date=start_date,
+            end_date=end_date,
             base_query=base_query,
             filtered_query=filtered_query,
             order_by=order_by
