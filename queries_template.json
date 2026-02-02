@@ -1,9 +1,35 @@
 {
   "queries": [
     {
-      "name": "total_rounds",
-      "description": "Total rounds played daily",
+      "name": "ezlinks_rounds",
+      "description": "EZ Links total rounds from FactBooking (sourcesystemkey = 34)",
       "csv_file": "working-dir/ezlrounds.csv",
+      "date_column": "playdatekey",
+      "count_column": "rounds_total",
+      "base_query": "SELECT playdatekey, SUM(NetRoundsTotal) as rounds_total FROM dbo.FactBooking WHERE sourcesystemkey = 34 GROUP BY playdatekey",
+      "filtered_query": "SELECT playdatekey, SUM(NetRoundsTotal) as rounds_total FROM dbo.FactBooking WHERE sourcesystemkey = 34 AND {where_clause} GROUP BY playdatekey",
+      "max_date_query": "SELECT MAX(playdatekey) FROM dbo.FactBooking WHERE sourcesystemkey = 34",
+      "order_by": "ORDER BY playdatekey",
+      "anomaly_threshold_z": -2.5,
+      "anomaly_threshold_min": 5000
+    },
+    {
+      "name": "golfnow_rounds",
+      "description": "GolfNow total rounds from FactBooking (sourcesystemkey = 1)",
+      "csv_file": "working-dir/golfnow_rounds.csv",
+      "date_column": "playdatekey",
+      "count_column": "rounds_total",
+      "base_query": "SELECT playdatekey, SUM(NetRoundsTotal) as rounds_total FROM dbo.FactBooking WHERE sourcesystemkey = 1 GROUP BY playdatekey",
+      "filtered_query": "SELECT playdatekey, SUM(NetRoundsTotal) as rounds_total FROM dbo.FactBooking WHERE sourcesystemkey = 1 AND {where_clause} GROUP BY playdatekey",
+      "max_date_query": "SELECT MAX(playdatekey) FROM dbo.FactBooking WHERE sourcesystemkey = 1",
+      "order_by": "ORDER BY playdatekey",
+      "anomaly_threshold_z": -2.5,
+      "anomaly_threshold_min": 5000
+    },
+    {
+      "name": "total_rounds",
+      "description": "Total rounds played daily (all sources)",
+      "csv_file": "working-dir/total_rounds.csv",
       "date_column": "playdatekey",
       "count_column": "count",
       "base_query": "SELECT {date_column}, {count_column} FROM {table}",
