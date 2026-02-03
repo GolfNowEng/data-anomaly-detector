@@ -309,14 +309,16 @@ Consolidated report grouped by query
 
 - **config_template.py** - Template for database configuration
 - **config.py** - Actual database credentials (gitignored)
-- **queries_template.json** - Template for query definitions
+- **queries_template.json** - Template for query definitions with real-world examples
 - **queries.json** - Actual query definitions (gitignored)
-- **query_loader.py** - Query configuration loader
+- **query_loader.py** - Query configuration loader and validator
 - **db_query.py** - Database connection and query module
-- **update_and_analyze.py** - Update data and run analysis
-- **past_low_anomalies.py** - Anomaly detection script (past low values only)
+- **update_and_analyze.py** - Update data and run analysis (main orchestrator)
+- **past_low_anomalies.py** - Anomaly detection engine with date filtering
+- **html_report.py** - Styled HTML report generator with navigation
 - **requirements.txt** - Python dependencies
 - **working-dir/** - CSV cache directory (gitignored)
+- **anomaly_report.html** - Generated HTML report (gitignored)
 
 ## Anomaly Detection
 
@@ -327,11 +329,19 @@ The analysis identifies days with abnormally low counts by:
 3. **Z-score calculation**: Computes z-score for each day against its day-of-week baseline
 4. **Threshold detection**: Flags anomalies using two criteria:
    - Z-score < threshold (default: -2.5)
-   - OR count < minimum threshold (default: 5000)
-5. **Past-only filtering**: Only analyzes dates before TODAY constant (excludes future dates)
+   - OR count < minimum threshold (configurable per query)
+5. **Date range filtering**: Only analyzes dates within specified range (default: 2024-01-01 to today)
+6. **Past-only filtering**: Excludes future dates from analysis
 
 ### Why day-of-week statistics?
 Golf rounds typically follow weekly patterns (higher on weekends, lower on weekdays). Comparing each day against its specific day-of-week history provides more accurate anomaly detection than comparing against overall averages.
+
+### Date Format Support
+The system supports multiple date formats in CSV files:
+- **YYYYMMDD** (integer): e.g., 20240101 (used by FactBooking.playdatekey)
+- **YYYY-MM-DD** (date string): e.g., 2024-01-01 (used by DimCustomer.CustomerCreatedDate)
+
+All dates are normalized to YYYYMMDD format for consistent display in reports.
 
 ## Multi-Query Benefits
 
