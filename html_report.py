@@ -8,7 +8,7 @@ from typing import List, Dict
 
 
 def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
-                        output_file: str = "anomaly_report.html",
+                        output_file: str = "reports/anomaly_report.html",
                         report_date: datetime = None,
                         query_descriptions: Dict[str, str] = None) -> str:
     """

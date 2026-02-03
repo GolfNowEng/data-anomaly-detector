@@ -196,8 +196,8 @@ Examples:
     )
     parser.add_argument('--html', action='store_true',
                        help='Generate HTML report')
-    parser.add_argument('--output', '-o', type=str, default='anomaly_report.html',
-                       help='HTML output filename (default: anomaly_report.html)')
+    parser.add_argument('--output', '-o', type=str, default='reports/anomaly_report.html',
+                       help='HTML output filename (default: reports/anomaly_report.html)')
     parser.add_argument('--min-date', type=str, default='2024-01-01',
                        help='Minimum date to include (YYYY-MM-DD format, default: 2024-01-01)')
 
@@ -275,6 +275,12 @@ Examples:
     if args.html:
         try:
             from html_report import generate_html_report
+            # Ensure reports directory exists
+            import os
+            output_dir = os.path.dirname(args.output)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
             output_file = generate_html_report(
                 anomalies_by_query,
                 args.output,

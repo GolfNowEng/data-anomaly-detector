@@ -1,4 +1,4 @@
-# EZ Links Rounds Data Analysis
+# Data Anomaly Detector
 
 Python tools for querying SQL Server database and analyzing ezlrounds data for anomalies. The system pulls rounds data from SQL Server, maintains CSV caches, and performs statistical anomaly detection based on day-of-week patterns.
 
@@ -165,11 +165,11 @@ python3 past_low_anomalies.py --min-date 2023-01-01
 
 **Generate HTML report:**
 ```bash
-# Generate styled HTML report (default: anomaly_report.html)
+# Generate styled HTML report (default: reports/anomaly_report.html)
 python3 past_low_anomalies.py --html
 
 # Specify custom output filename
-python3 past_low_anomalies.py --html --output my_report.html
+python3 past_low_anomalies.py --html --output reports/my_report.html
 
 # Filter by date range
 python3 past_low_anomalies.py --html --min-date 2024-01-01
@@ -177,7 +177,7 @@ python3 past_low_anomalies.py --html --min-date 2024-01-01
 
 **Command-line options:**
 - `--html` - Generate HTML report
-- `--output FILENAME` - Specify output filename (default: anomaly_report.html)
+- `--output FILENAME` - Specify output filename (default: reports/anomaly_report.html)
 - `--min-date YYYY-MM-DD` - Minimum date to include in analysis (default: 2024-01-01)
 
 The HTML report includes:
@@ -287,7 +287,9 @@ finally:
 4. **db_query.py** - Database abstraction layer (EZLinksRoundsDB class)
 5. **update_and_analyze.py** - Orchestration script
 6. **past_low_anomalies.py** - Anomaly detection engine
-7. **working-dir/** - CSV cache directory (gitignored)
+7. **html_report.py** - HTML report generator
+8. **working-dir/** - CSV cache directory (gitignored)
+9. **reports/** - HTML reports directory (gitignored)
 
 ### Data Flow
 ```
@@ -302,7 +304,7 @@ working-dir/*.csv → CSV caches (one per query)
     ↓
 past_low_anomalies.py → Anomaly detection
     ↓
-Consolidated report grouped by query
+Console report OR reports/*.html → HTML report
 ```
 
 ## Files
@@ -318,7 +320,7 @@ Consolidated report grouped by query
 - **html_report.py** - Styled HTML report generator with navigation
 - **requirements.txt** - Python dependencies
 - **working-dir/** - CSV cache directory (gitignored)
-- **anomaly_report.html** - Generated HTML report (gitignored)
+- **reports/** - HTML reports directory (gitignored)
 
 ## Anomaly Detection
 
