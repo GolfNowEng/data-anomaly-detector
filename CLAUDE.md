@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-EZ Links Rounds Data Analysis - Python tools for querying SQL Server database and analyzing ezlrounds data for anomalies. The system pulls rounds data from SQL Server, maintains CSV caches, and performs statistical anomaly detection based on day-of-week patterns across multiple configurable queries.
+EZ Links Rounds Data Analysis - Python tools for querying SQL Server database and analyzing ezlrounds data for anomalies. The system pulls rounds data from SQL Server, maintains CSV caches, and performs statistical anomaly detection based on year-over-year comparison across multiple configurable queries.
 
 ## Architecture
 
@@ -42,10 +42,11 @@ EZ Links Rounds Data Analysis - Python tools for querying SQL Server database an
 6. **past_low_anomalies.py** - Statistical anomaly detection
    - Loads queries from queries.json
    - Analyzes each CSV file independently
-   - Calculates day-of-week statistics (mean, stdev)
-   - Flags low anomalies using per-query thresholds
-   - Only analyzes past dates (hardcoded TODAY reference at line 67)
-   - Supports --min-date parameter to filter anomalies by date range
+   - Uses year-over-year (YoY) comparison methodology
+   - Flags anomalies based on YoY percentage decrease (default: -50%) or absolute minimum threshold
+   - `find_prior_year_date()` at line 39 matches same day-of-week from prior year
+   - Only analyzes past dates (hardcoded TODAY reference at line 98)
+   - Supports --min-date parameter to filter anomalies by date range (default: 2025-01-01)
    - Supports --html flag to generate styled HTML reports
    - Produces consolidated report grouped by query (console or HTML)
 
@@ -139,7 +140,7 @@ python3 db_query.py
 
 **CSV-based caching:** The system maintains separate CSV files for each query in working-dir/. `update_csv()` reads the latest date in each CSV and queries only newer records, then appends them. This avoids re-downloading historical data on each run.
 
-**Day-of-week statistics:** Anomaly detection calculates separate mean/stdev for each day of week (Monday, Tuesday, etc.) since weekends typically have higher golf round counts. Each day is compared against its own historical pattern.
+**Year-over-year comparison:** Anomaly detection uses year-over-year (YoY) comparison methodology. For each date, the system finds the corresponding date from the prior year (matching the same day of week within the same approximate week) and calculates the percentage change. Anomalies are flagged when the YoY decrease exceeds the threshold (default: -50%) OR when the count falls below the absolute minimum threshold. This methodology accounts for seasonal patterns while detecting significant drops in activity.
 
 **Date format support:** The system supports both YYYYMMDD (integer, e.g., 20240101 from FactBooking.playdatekey) and YYYY-MM-DD (date string, e.g., 2024-01-01 from DimCustomer.CustomerCreatedDate). All dates are normalized to YYYYMMDD format in reports via parse_date() at past_low_anomalies.py:16.
 
@@ -197,15 +198,15 @@ python3 db_query.py
 - Returns exit code 0 on success, 1 on failure for scripting
 
 **past_low_anomalies.py:**
-- TODAY constant at line 67 defines current date for filtering future dates
+- TODAY constant at line 98 defines current date for filtering future dates
 - `parse_date()` at line 16 handles both YYYYMMDD and YYYY-MM-DD formats
-- `analyze_csv()` at line 46 processes a single CSV file
-- Supports --min-date parameter (default: 2024-01-01) to filter historical anomalies (line 70)
+- `find_prior_year_date()` at line 39 finds corresponding date from prior year (same day-of-week)
+- `analyze_csv()` at line 76 processes a single CSV file using YoY comparison
+- Supports --min-date parameter (default: 2025-01-01) to filter historical anomalies
 - Supports --html flag to generate HTML report via html_report.py
-- `calculate_z_score()` at line 39 handles zero stdev edge case
-- Anomaly threshold: z_score < threshold_z OR count < threshold_min (line 131)
-- `print_anomalies()` at line 147 formats console output grouped by year/month
-- Output formatting includes count, expected, z-score, and percent difference
+- Anomaly threshold: yoy_pct <= -50% OR count < threshold_min (line 184)
+- `print_anomalies()` at line 202 formats console output grouped by year/month
+- Output formatting includes count, prior year count, YoY change, and YoY percentage
 - Produces consolidated report with summary across all queries
 
 **html_report.py:**
