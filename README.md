@@ -1,5 +1,11 @@
 # Data Anomaly Detector
 
+![Python](https://img.shields.io/badge/python-3.7+-blue.svg)
+![SQL Server](https://img.shields.io/badge/database-SQL%20Server-red.svg)
+![Status](https://img.shields.io/badge/status-active-success.svg)
+![Maintenance](https://img.shields.io/badge/maintained-yes-green.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
 Python tools for querying SQL Server database and analyzing ezlrounds data for anomalies. The system pulls rounds data from SQL Server, maintains CSV caches, and performs statistical anomaly detection based on day-of-week patterns.
 
 ## Features
