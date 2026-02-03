@@ -340,7 +340,7 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
         html += f"""                <a href="#query-{query_name}" class="nav-link">{query_name}</a>
 """
 
-    html += """            </div>
+    html += f"""            </div>
         </div>
 
         <div class="summary">
