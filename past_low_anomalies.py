@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Generate a list of LOW anomalies from the PAST only across multiple queries.
+Generate a list of LOW anomalies using year-over-year comparison.
 """
 
 import csv
 import os
 import sys
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 import statistics
 from query_loader import load_queries
@@ -36,29 +36,60 @@ def get_day_name(date_obj):
     return date_obj.strftime('%A')
 
 
-def calculate_z_score(value, mean, std_dev):
-    """Calculate z-score with zero stdev handling."""
-    if std_dev == 0:
-        return 0
-    return (value - mean) / std_dev
+def find_prior_year_date(target_date, data_by_date):
+    """
+    Find the corresponding date from the prior year.
+    Looks for the same day of week in roughly the same week of the year.
+
+    Args:
+        target_date: The date to find a prior year match for
+        data_by_date: Dictionary mapping date objects to data entries
+
+    Returns:
+        The prior year's date object, or None if not found
+    """
+    # Start by trying exactly one year ago
+    prior_year = target_date.year - 1
+    target_day_of_week = target_date.weekday()
+
+    # Try the exact date first (same month/day, prior year)
+    try:
+        candidate = target_date.replace(year=prior_year)
+        if candidate in data_by_date and candidate.weekday() == target_day_of_week:
+            return candidate
+    except ValueError:
+        # Handle leap year edge case (Feb 29)
+        pass
+
+    # Search within +/- 3 days to find same day of week
+    for offset in range(-3, 4):
+        try:
+            candidate = target_date.replace(year=prior_year) + timedelta(days=offset)
+            if candidate in data_by_date and candidate.weekday() == target_day_of_week:
+                return candidate
+        except ValueError:
+            continue
+
+    return None
 
 
 def analyze_csv(csv_file, query_name, date_column, count_column,
                 threshold_z=-2.5, threshold_min=5000, today=None, query_description="",
-                min_date=None):
+                min_date=None, yoy_threshold_pct=-50):
     """
-    Analyze a single CSV file for anomalies.
+    Analyze a single CSV file for year-over-year anomalies.
 
     Args:
         csv_file: Path to CSV file
         query_name: Name of the query for reporting
         date_column: Name of the date column
         count_column: Name of the count column
-        threshold_z: Z-score threshold for anomaly detection
-        threshold_min: Minimum count threshold
+        threshold_z: Z-score threshold (deprecated, kept for compatibility)
+        threshold_min: Minimum count threshold (absolute floor)
         today: Current date (for filtering future dates)
         query_description: Description of the query
         min_date: Minimum date to include in analysis (datetime object)
+        yoy_threshold_pct: Year-over-year decrease threshold (default: -50%)
 
     Returns:
         List of anomaly dictionaries
@@ -67,15 +98,17 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
         today = datetime(2026, 2, 2)
 
     if min_date is None:
-        min_date = datetime(2024, 1, 1)  # Default to 2024-01-01
+        min_date = datetime(2025, 1, 1)  # Default to 2025-01-01 for YoY comparison
 
     # Check if CSV file exists
     if not os.path.exists(csv_file):
         print(f"WARNING: CSV file not found: {csv_file}")
         return []
 
-    # Read data
+    # Read data into both list and dictionary for easy lookup
     data = []
+    data_by_date = {}
+
     try:
         with open(csv_file, 'r') as f:
             reader = csv.DictReader(f)
@@ -83,12 +116,14 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
                 date_obj = parse_date(row['playdatekey'])
                 count = int(row['count'])
                 day_name = get_day_name(date_obj)
-                data.append({
+                entry = {
                     'date': date_obj,
-                    'date_str': date_obj.strftime('%Y%m%d'),  # Normalize to YYYYMMDD format
+                    'date_str': date_obj.strftime('%Y%m%d'),
                     'count': count,
                     'day_name': day_name
-                })
+                }
+                data.append(entry)
+                data_by_date[date_obj] = entry
     except Exception as e:
         print(f"ERROR reading {csv_file}: {e}")
         return []
@@ -97,21 +132,8 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
         print(f"WARNING: No data found in {csv_file}")
         return []
 
-    # Group by day of week
-    day_of_week_counts = defaultdict(list)
-    for entry in data:
-        day_of_week_counts[entry['day_name']].append(entry['count'])
-
-    # Calculate stats
-    day_stats = {}
-    for day, counts in day_of_week_counts.items():
-        day_stats[day] = {
-            'mean': statistics.mean(counts),
-            'stdev': statistics.stdev(counts) if len(counts) > 1 else 0,
-        }
-
-    # Find LOW anomalies from the PAST only
-    past_low_anomalies = []
+    # Find year-over-year anomalies
+    yoy_anomalies = []
 
     for entry in data:
         # Skip future dates
@@ -122,26 +144,59 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
         if entry['date'] < min_date:
             continue
 
-        day = entry['day_name']
-        count = entry['count']
-        stats = day_stats[day]
-        z_score = calculate_z_score(count, stats['mean'], stats['stdev'])
+        current_count = entry['count']
 
-        # Only include LOW anomalies (z-score < threshold_z OR count < threshold_min)
-        if z_score < threshold_z or count < threshold_min:
-            past_low_anomalies.append({
+        # Check absolute threshold first
+        if current_count < threshold_min:
+            # Find prior year for context, but flag anyway
+            prior_date = find_prior_year_date(entry['date'], data_by_date)
+            prior_count = data_by_date[prior_date]['count'] if prior_date else 0
+
+            yoy_anomalies.append({
                 **entry,
                 'query_name': query_name,
                 'query_description': query_description,
-                'z_score': z_score,
-                'expected': stats['mean'],
-                'pct_diff': ((count - stats['mean']) / stats['mean']) * 100 if stats['mean'] != 0 else 0
+                'prior_year_date': prior_date.strftime('%Y%m%d') if prior_date else 'N/A',
+                'prior_year_count': prior_count,
+                'yoy_change': current_count - prior_count if prior_date else 0,
+                'yoy_pct': ((current_count - prior_count) / prior_count * 100) if (prior_date and prior_count > 0) else 0,
+                'reason': 'Below minimum threshold'
+            })
+            continue
+
+        # Find prior year's corresponding date
+        prior_date = find_prior_year_date(entry['date'], data_by_date)
+
+        if prior_date is None:
+            # No prior year data available
+            continue
+
+        prior_count = data_by_date[prior_date]['count']
+
+        if prior_count == 0:
+            continue
+
+        # Calculate year-over-year change
+        yoy_change = current_count - prior_count
+        yoy_pct = (yoy_change / prior_count) * 100
+
+        # Flag if decrease exceeds threshold
+        if yoy_pct <= yoy_threshold_pct:
+            yoy_anomalies.append({
+                **entry,
+                'query_name': query_name,
+                'query_description': query_description,
+                'prior_year_date': prior_date.strftime('%Y%m%d'),
+                'prior_year_count': prior_count,
+                'yoy_change': yoy_change,
+                'yoy_pct': yoy_pct,
+                'reason': 'Year-over-year decrease'
             })
 
     # Sort by date
-    past_low_anomalies.sort(key=lambda x: x['date'])
+    yoy_anomalies.sort(key=lambda x: x['date'])
 
-    return past_low_anomalies
+    return yoy_anomalies
 
 
 def print_anomalies(anomalies, query_name, query_description):
@@ -150,12 +205,18 @@ def print_anomalies(anomalies, query_name, query_description):
         print("No anomalies found.")
         return
 
-    print(f"{'Date':<12} {'Day':<10} {'Count':>10} {'Expected':>10} {'Z-Score':>8} {'% Diff':>8}")
+    print(f"{'Date':<12} {'Day':<10} {'Count':>10} {'Prior Year':>12} {'YoY Change':>12} {'YoY %':>8}")
     print("-" * 80)
 
     for entry in anomalies:
+        prior_date_short = entry.get('prior_year_date', 'N/A')
+        if prior_date_short != 'N/A' and len(prior_date_short) == 8:
+            # Format as MM/DD/YY for readability
+            prior_date_short = f"{prior_date_short[4:6]}/{prior_date_short[6:8]}/{prior_date_short[2:4]}"
+
         print(f"{entry['date_str']:<12} {entry['day_name']:<10} {entry['count']:>10,} "
-              f"{entry['expected']:>10.0f} {entry['z_score']:>8.2f} {entry['pct_diff']:>7.1f}%")
+              f"{entry.get('prior_year_count', 0):>12,} {entry.get('yoy_change', 0):>12,} "
+              f"{entry.get('yoy_pct', 0):>7.1f}%")
 
     print(f"\nTotal anomalies: {len(anomalies)}")
 
@@ -170,14 +231,15 @@ def print_anomalies(anomalies, query_name, query_description):
         month = year_month[4:6]
         print(f"\n{year}-{month} ({len(items)} anomalies):")
         for item in items:
-            print(f"  {item['date_str']} ({item['day_name']:<9}): {item['count']:>8,}")
+            prior_info = f"vs {item.get('prior_year_count', 0):,}" if item.get('prior_year_count') else ""
+            print(f"  {item['date_str']} ({item['day_name']:<9}): {item['count']:>8,} {prior_info} ({item.get('yoy_pct', 0):+.1f}%)")
 
 
 def main():
     """Run anomaly analysis on all queries."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description='Analyze CSV files for past low anomalies',
+        description='Analyze CSV files for year-over-year anomalies',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -191,15 +253,15 @@ Examples:
   python3 past_low_anomalies.py --html --output my_report.html
 
   # Filter for specific date range
-  python3 past_low_anomalies.py --min-date 2024-01-01
+  python3 past_low_anomalies.py --min-date 2025-01-01
         """
     )
     parser.add_argument('--html', action='store_true',
                        help='Generate HTML report')
     parser.add_argument('--output', '-o', type=str, default='reports/anomaly_report.html',
                        help='HTML output filename (default: reports/anomaly_report.html)')
-    parser.add_argument('--min-date', type=str, default='2024-01-01',
-                       help='Minimum date to include (YYYY-MM-DD format, default: 2024-01-01)')
+    parser.add_argument('--min-date', type=str, default='2025-01-01',
+                       help='Minimum date to include (YYYY-MM-DD format, default: 2025-01-01 for YoY comparison)')
 
     args = parser.parse_args()
 
