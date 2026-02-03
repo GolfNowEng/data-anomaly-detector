@@ -9,7 +9,8 @@ from typing import List, Dict
 
 def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
                         output_file: str = "anomaly_report.html",
-                        report_date: datetime = None) -> str:
+                        report_date: datetime = None,
+                        query_descriptions: Dict[str, str] = None) -> str:
     """
     Generate a styled HTML report from anomaly analysis results.
 
@@ -17,12 +18,16 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
         anomalies_by_query: Dictionary mapping query names to lists of anomaly dicts
         output_file: Output HTML filename
         report_date: Date the report was generated (default: now)
+        query_descriptions: Dictionary mapping query names to descriptions
 
     Returns:
         Path to the generated HTML file
     """
     if report_date is None:
         report_date = datetime.now()
+
+    if query_descriptions is None:
+        query_descriptions = {}
 
     # Calculate summary statistics
     total_anomalies = sum(len(anomalies) for anomalies in anomalies_by_query.values())
@@ -363,10 +368,9 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
 """
 
     for query_name, anomalies in anomalies_by_query.items():
-        if not anomalies:
-            continue
-
-        query_desc = anomalies[0].get('query_description', query_name) if anomalies else query_name
+        query_desc = query_descriptions.get(query_name, query_name)
+        if anomalies:
+            query_desc = anomalies[0].get('query_description', query_desc)
 
         # Calculate query statistics
         severe_count = sum(1 for a in anomalies if a['pct_diff'] < -95)
@@ -385,6 +389,15 @@ def generate_html_report(anomalies_by_query: Dict[str, List[Dict]],
                     </div>
                 </div>
 """
+
+        if not anomalies:
+            # Show message for queries with no anomalies
+            html += """                <div class="no-anomalies">
+                    ✓ No anomalies detected - all values within expected ranges
+                </div>
+            </div>
+"""
+            continue
 
         # Group by month
         grouped = group_by_month(anomalies)

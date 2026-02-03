@@ -225,9 +225,12 @@ Examples:
 
     all_anomalies = []
     anomalies_by_query = {}
+    query_descriptions = {}
 
     # Process each query
     for query in queries:
+        query_descriptions[query['name']] = query.get('description', query['name'])
+
         print(f"\n{'='*80}")
         print(f"ANALYZING: {query['name']}")
         print(f"Description: {query['description']}")
@@ -272,7 +275,11 @@ Examples:
     if args.html:
         try:
             from html_report import generate_html_report
-            output_file = generate_html_report(anomalies_by_query, args.output)
+            output_file = generate_html_report(
+                anomalies_by_query,
+                args.output,
+                query_descriptions=query_descriptions
+            )
             print(f"\n✓ HTML report generated: {output_file}")
         except Exception as e:
             print(f"\n✗ Error generating HTML report: {e}")
