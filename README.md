@@ -5,9 +5,13 @@ Python tools for querying SQL Server database and analyzing ezlrounds data for a
 ## Features
 
 - **Multi-query support**: Define multiple SQL queries to track different data dimensions
+- **Query filtering**: Process specific queries using `--query` parameter
 - **CSV-based caching**: Intelligent incremental updates (append only new records)
 - **Day-of-week statistics**: Anomaly detection considers weekday patterns
-- **Flexible SQL queries**: Support for JOINs, GROUP BY, complex filters
+- **Flexible SQL queries**: Support for JOINs, GROUP BY, complex filters, multiple date formats
+- **Date range filtering**: Focus on recent data with `--min-date` parameter (default: 2024-01-01)
+- **Styled HTML reports**: Professional reports with sticky navigation, color-coded severity, smooth scrolling
+- **Command-line flexibility**: Date filters, query selection, HTML/console output options
 - **Consolidated reporting**: Analyze anomalies across all queries simultaneously
 
 ## Setup
@@ -152,7 +156,11 @@ python3 update_and_analyze.py --query ezlinks_rounds --start-date 20240101
 
 **Console output:**
 ```bash
+# Default (analyzes data from 2024-01-01 onwards)
 python3 past_low_anomalies.py
+
+# Custom date range
+python3 past_low_anomalies.py --min-date 2023-01-01
 ```
 
 **Generate HTML report:**
@@ -162,14 +170,26 @@ python3 past_low_anomalies.py --html
 
 # Specify custom output filename
 python3 past_low_anomalies.py --html --output my_report.html
+
+# Filter by date range
+python3 past_low_anomalies.py --html --min-date 2024-01-01
 ```
 
+**Command-line options:**
+- `--html` - Generate HTML report
+- `--output FILENAME` - Specify output filename (default: anomaly_report.html)
+- `--min-date YYYY-MM-DD` - Minimum date to include in analysis (default: 2024-01-01)
+
 The HTML report includes:
-- Executive summary with total anomalies across all queries
-- Color-coded severity indicators (severe/moderate/mild)
-- Interactive tables grouped by query and month
-- Professional styling with gradient headers
-- Print-friendly layout
+- **Sticky top navigation**: Quick links to jump between query sections
+- **Executive summary**: Total anomalies across all queries with averages
+- **Color-coded severity**: Severe (red, <-95%), Moderate (orange, -85% to -95%), Mild (yellow, >-85%)
+- **Interactive tables**: Grouped by query and month with hover effects
+- **Professional styling**: Gradient headers, smooth scrolling, responsive design
+- **Print-friendly layout**: Navigation hidden, optimized formatting for printing
+
+**Date filtering:**
+By default, only anomalies from 2024-01-01 onwards are shown to reduce noise from historical data. This is especially important for queries with long history (e.g., customer data from 1900). You can customize the date range using `--min-date`.
 
 Analyzes existing CSV files in `working-dir/` without updating from database.
 
