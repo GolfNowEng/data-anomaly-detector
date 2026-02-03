@@ -44,7 +44,8 @@ def calculate_z_score(value, mean, std_dev):
 
 
 def analyze_csv(csv_file, query_name, date_column, count_column,
-                threshold_z=-2.5, threshold_min=5000, today=None, query_description=""):
+                threshold_z=-2.5, threshold_min=5000, today=None, query_description="",
+                min_date=None):
     """
     Analyze a single CSV file for anomalies.
 
@@ -57,12 +58,16 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
         threshold_min: Minimum count threshold
         today: Current date (for filtering future dates)
         query_description: Description of the query
+        min_date: Minimum date to include in analysis (datetime object)
 
     Returns:
         List of anomaly dictionaries
     """
     if today is None:
         today = datetime(2026, 2, 2)
+
+    if min_date is None:
+        min_date = datetime(2024, 1, 1)  # Default to 2024-01-01
 
     # Check if CSV file exists
     if not os.path.exists(csv_file):
@@ -111,6 +116,10 @@ def analyze_csv(csv_file, query_name, date_column, count_column,
     for entry in data:
         # Skip future dates
         if entry['date'] >= today:
+            continue
+
+        # Skip dates before minimum date
+        if entry['date'] < min_date:
             continue
 
         day = entry['day_name']
@@ -180,17 +189,29 @@ Examples:
 
   # Generate HTML report with custom filename
   python3 past_low_anomalies.py --html --output my_report.html
+
+  # Filter for specific date range
+  python3 past_low_anomalies.py --min-date 2024-01-01
         """
     )
     parser.add_argument('--html', action='store_true',
                        help='Generate HTML report')
     parser.add_argument('--output', '-o', type=str, default='anomaly_report.html',
                        help='HTML output filename (default: anomaly_report.html)')
+    parser.add_argument('--min-date', type=str, default='2024-01-01',
+                       help='Minimum date to include (YYYY-MM-DD format, default: 2024-01-01)')
 
     args = parser.parse_args()
 
     # Today's date
     TODAY = datetime(2026, 2, 2)
+
+    # Parse minimum date
+    try:
+        MIN_DATE = datetime.strptime(args.min_date, '%Y-%m-%d')
+    except ValueError:
+        print(f"ERROR: Invalid min-date format: {args.min_date}. Expected YYYY-MM-DD")
+        return 1
 
     # Load queries from JSON
     try:
@@ -198,6 +219,9 @@ Examples:
     except Exception as e:
         print(f"ERROR: Failed to load queries: {e}")
         return 1
+
+    print(f"Date range: {MIN_DATE.strftime('%Y-%m-%d')} to {TODAY.strftime('%Y-%m-%d')}")
+    print()
 
     all_anomalies = []
     anomalies_by_query = {}
@@ -219,7 +243,8 @@ Examples:
             query.get('anomaly_threshold_z', -2.5),
             query.get('anomaly_threshold_min', 5000),
             TODAY,
-            query.get('description', query['name'])
+            query.get('description', query['name']),
+            MIN_DATE  # Pass minimum date filter
         )
 
         # Print anomalies for this query
