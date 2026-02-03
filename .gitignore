@@ -32,8 +32,9 @@ working-dir/
 working-dir/*.csv
 
 # Generated reports
-reports/
-reports/*.html
+# Reports are now checked into git for tracking
+#reports/
+#reports/*.html
 
 # IDE
 .vscode/

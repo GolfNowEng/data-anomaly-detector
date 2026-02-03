@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anomaly Analysis Report - 2026-02-02</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .header .date {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 40px;
+            background: #f8f9fa;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .summary-card .number {
+            font-size: 3em;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .summary-card .label {
+            font-size: 1.1em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .query-section {
+            margin-bottom: 50px;
+        }
+
+        .query-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .query-header h2 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .query-header .description {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .query-stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .query-stats .stat {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.95em;
+        }
+
+        .anomaly-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .anomaly-table thead {
+            background: #667eea;
+            color: white;
+        }
+
+        .anomaly-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 1px;
+        }
+
+        .anomaly-table th.right {
+            text-align: right;
+        }
+
+        .anomaly-table tbody tr {
+            border-bottom: 1px solid #e9ecef;
+            transition: background-color 0.2s;
+        }
+
+        .anomaly-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .anomaly-table tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        .anomaly-table td {
+            padding: 12px 15px;
+        }
+
+        .anomaly-table td.right {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        .severity-high {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .severity-medium {
+            color: #fd7e14;
+            font-weight: 600;
+        }
+
+        .severity-low {
+            color: #ffc107;
+            font-weight: 600;
+        }
+
+        .month-group {
+            margin-bottom: 30px;
+        }
+
+        .month-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 15px;
+            font-weight: 600;
+            font-size: 1.2em;
+            color: #495057;
+        }
+
+        .no-anomalies {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-size: 1.1em;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .summary-card:hover,
+            .anomaly-table tbody tr:hover {
+                transform: none;
+                background-color: white;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Anomaly Analysis Report</h1>
+            <div class="date">Generated on February 02, 2026 at 06:49 PM</div>
+        </div>
+
+        <div class="summary">
+            <div class="summary-card">
+                <div class="number">75</div>
+                <div class="label">Total Anomalies</div>
+            </div>
+            <div class="summary-card">
+                <div class="number">2</div>
+                <div class="label">Queries Analyzed</div>
+            </div>
+            <div class="summary-card">
+                <div class="number">37.5</div>
+                <div class="label">Avg per Query</div>
+            </div>
+        </div>
+        <div class="content">
+            <div class="query-section">
+                <div class="query-header">
+                    <h2>ezlinks_rounds</h2>
+                    <div class="description">EZ Links total rounds from FactBooking (sourcesystemkey = 34)</div>
+                    <div class="query-stats">
+                        <div class="stat">📊 75 anomalies found</div>
+                        <div class="stat">🔴 36 severe (&lt;-95%)</div>
+                        <div class="stat">🟠 35 moderate (-95% to -85%)</div>
+                        <div class="stat">🟡 4 mild (&gt;-85%)</div>
+                    </div>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">January 2024 (2 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240115</td>
+                                <td>Monday</td>
+                                <td class="right">2,812</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.05</td>
+                                <td class="right severity-medium">-88.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20240131</td>
+                                <td>Wednesday</td>
+                                <td class="right">2,444</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-medium">-90.2%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">February 2024 (2 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240215</td>
+                                <td>Thursday</td>
+                                <td class="right">3,031</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-medium">-88.8%</td>
+                            </tr>
+                            <tr>
+                                <td>20240229</td>
+                                <td>Thursday</td>
+                                <td class="right">2,839</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.17</td>
+                                <td class="right severity-medium">-89.5%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">March 2024 (2 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240315</td>
+                                <td>Friday</td>
+                                <td class="right">4,922</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.11</td>
+                                <td class="right severity-medium">-85.9%</td>
+                            </tr>
+                            <tr>
+                                <td>20240331</td>
+                                <td>Sunday</td>
+                                <td class="right">4,826</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.10</td>
+                                <td class="right severity-medium">-87.6%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">April 2024 (2 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240415</td>
+                                <td>Monday</td>
+                                <td class="right">3,054</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.04</td>
+                                <td class="right severity-medium">-87.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20240430</td>
+                                <td>Tuesday</td>
+                                <td class="right">3,056</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.12</td>
+                                <td class="right severity-medium">-86.8%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">May 2024 (2 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240510</td>
+                                <td>Friday</td>
+                                <td class="right">4,445</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.12</td>
+                                <td class="right severity-medium">-87.3%</td>
+                            </tr>
+                            <tr>
+                                <td>20240521</td>
+                                <td>Tuesday</td>
+                                <td class="right">3,262</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.10</td>
+                                <td class="right severity-medium">-85.9%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">June 2024 (1 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240610</td>
+                                <td>Monday</td>
+                                <td class="right">2,976</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.04</td>
+                                <td class="right severity-medium">-88.0%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">July 2024 (2 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240715</td>
+                                <td>Monday</td>
+                                <td class="right">3,548</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.02</td>
+                                <td class="right severity-medium">-85.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20240731</td>
+                                <td>Wednesday</td>
+                                <td class="right">4,506</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.05</td>
+                                <td class="right severity-low">-81.9%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">August 2024 (1 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240815</td>
+                                <td>Thursday</td>
+                                <td class="right">4,222</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.10</td>
+                                <td class="right severity-low">-84.4%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">September 2024 (1 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20240930</td>
+                                <td>Monday</td>
+                                <td class="right">2,851</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.05</td>
+                                <td class="right severity-medium">-88.5%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">October 2024 (2 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20241015</td>
+                                <td>Tuesday</td>
+                                <td class="right">3,368</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.10</td>
+                                <td class="right severity-medium">-85.5%</td>
+                            </tr>
+                            <tr>
+                                <td>20241031</td>
+                                <td>Thursday</td>
+                                <td class="right">3,148</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.15</td>
+                                <td class="right severity-medium">-88.4%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">November 2024 (1 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20241130</td>
+                                <td>Saturday</td>
+                                <td class="right">3,926</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.12</td>
+                                <td class="right severity-medium">-90.0%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">December 2024 (1 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20241215</td>
+                                <td>Sunday</td>
+                                <td class="right">3,938</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.13</td>
+                                <td class="right severity-medium">-89.9%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">November 2025 (5 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20251124</td>
+                                <td>Monday</td>
+                                <td class="right">4,226</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-0.98</td>
+                                <td class="right severity-low">-83.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20251125</td>
+                                <td>Tuesday</td>
+                                <td class="right">4,205</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.05</td>
+                                <td class="right severity-low">-81.8%</td>
+                            </tr>
+                            <tr>
+                                <td>20251127</td>
+                                <td>Thursday</td>
+                                <td class="right">3,262</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.15</td>
+                                <td class="right severity-medium">-88.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20251129</td>
+                                <td>Saturday</td>
+                                <td class="right">4,393</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.10</td>
+                                <td class="right severity-medium">-88.8%</td>
+                            </tr>
+                            <tr>
+                                <td>20251130</td>
+                                <td>Sunday</td>
+                                <td class="right">3,028</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-medium">-92.2%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">December 2025 (31 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20251201</td>
+                                <td>Monday</td>
+                                <td class="right">2,095</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.09</td>
+                                <td class="right severity-medium">-91.6%</td>
+                            </tr>
+                            <tr>
+                                <td>20251202</td>
+                                <td>Tuesday</td>
+                                <td class="right">2,350</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-medium">-89.9%</td>
+                            </tr>
+                            <tr>
+                                <td>20251203</td>
+                                <td>Wednesday</td>
+                                <td class="right">2,415</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-medium">-90.3%</td>
+                            </tr>
+                            <tr>
+                                <td>20251204</td>
+                                <td>Thursday</td>
+                                <td class="right">2,919</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-medium">-89.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251205</td>
+                                <td>Friday</td>
+                                <td class="right">4,266</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.13</td>
+                                <td class="right severity-medium">-87.8%</td>
+                            </tr>
+                            <tr>
+                                <td>20251206</td>
+                                <td>Saturday</td>
+                                <td class="right">4,295</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.10</td>
+                                <td class="right severity-medium">-89.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20251207</td>
+                                <td>Sunday</td>
+                                <td class="right">3,217</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.15</td>
+                                <td class="right severity-medium">-91.8%</td>
+                            </tr>
+                            <tr>
+                                <td>20251208</td>
+                                <td>Monday</td>
+                                <td class="right">1,637</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.11</td>
+                                <td class="right severity-medium">-93.4%</td>
+                            </tr>
+                            <tr>
+                                <td>20251209</td>
+                                <td>Tuesday</td>
+                                <td class="right">1,530</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.20</td>
+                                <td class="right severity-medium">-93.4%</td>
+                            </tr>
+                            <tr>
+                                <td>20251210</td>
+                                <td>Wednesday</td>
+                                <td class="right">1,462</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.21</td>
+                                <td class="right severity-medium">-94.1%</td>
+                            </tr>
+                            <tr>
+                                <td>20251211</td>
+                                <td>Thursday</td>
+                                <td class="right">1,837</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.22</td>
+                                <td class="right severity-medium">-93.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251212</td>
+                                <td>Friday</td>
+                                <td class="right">1,910</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.22</td>
+                                <td class="right severity-medium">-94.5%</td>
+                            </tr>
+                            <tr>
+                                <td>20251213</td>
+                                <td>Saturday</td>
+                                <td class="right">1,868</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.18</td>
+                                <td class="right severity-high">-95.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251214</td>
+                                <td>Sunday</td>
+                                <td class="right">1,103</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.22</td>
+                                <td class="right severity-high">-97.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251215</td>
+                                <td>Monday</td>
+                                <td class="right">1,197</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.13</td>
+                                <td class="right severity-high">-95.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251216</td>
+                                <td>Tuesday</td>
+                                <td class="right">930</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.23</td>
+                                <td class="right severity-high">-96.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20251217</td>
+                                <td>Wednesday</td>
+                                <td class="right">757</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.25</td>
+                                <td class="right severity-high">-97.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20251218</td>
+                                <td>Thursday</td>
+                                <td class="right">1,026</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.25</td>
+                                <td class="right severity-high">-96.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251219</td>
+                                <td>Friday</td>
+                                <td class="right">1,121</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.25</td>
+                                <td class="right severity-high">-96.8%</td>
+                            </tr>
+                            <tr>
+                                <td>20251220</td>
+                                <td>Saturday</td>
+                                <td class="right">1,206</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.20</td>
+                                <td class="right severity-high">-96.9%</td>
+                            </tr>
+                            <tr>
+                                <td>20251221</td>
+                                <td>Sunday</td>
+                                <td class="right">994</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.22</td>
+                                <td class="right severity-high">-97.5%</td>
+                            </tr>
+                            <tr>
+                                <td>20251222</td>
+                                <td>Monday</td>
+                                <td class="right">949</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.14</td>
+                                <td class="right severity-high">-96.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251223</td>
+                                <td>Tuesday</td>
+                                <td class="right">1,068</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.23</td>
+                                <td class="right severity-high">-95.4%</td>
+                            </tr>
+                            <tr>
+                                <td>20251224</td>
+                                <td>Wednesday</td>
+                                <td class="right">1,003</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.24</td>
+                                <td class="right severity-high">-96.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20251225</td>
+                                <td>Thursday</td>
+                                <td class="right">752</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.27</td>
+                                <td class="right severity-high">-97.2%</td>
+                            </tr>
+                            <tr>
+                                <td>20251226</td>
+                                <td>Friday</td>
+                                <td class="right">1,404</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.24</td>
+                                <td class="right severity-high">-96.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20251227</td>
+                                <td>Saturday</td>
+                                <td class="right">1,392</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.20</td>
+                                <td class="right severity-high">-96.4%</td>
+                            </tr>
+                            <tr>
+                                <td>20251228</td>
+                                <td>Sunday</td>
+                                <td class="right">1,362</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.21</td>
+                                <td class="right severity-high">-96.5%</td>
+                            </tr>
+                            <tr>
+                                <td>20251229</td>
+                                <td>Monday</td>
+                                <td class="right">1,474</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.12</td>
+                                <td class="right severity-medium">-94.1%</td>
+                            </tr>
+                            <tr>
+                                <td>20251230</td>
+                                <td>Tuesday</td>
+                                <td class="right">1,502</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.20</td>
+                                <td class="right severity-medium">-93.5%</td>
+                            </tr>
+                            <tr>
+                                <td>20251231</td>
+                                <td>Wednesday</td>
+                                <td class="right">1,283</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.22</td>
+                                <td class="right severity-medium">-94.8%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="month-group">
+                    <div class="month-header">January 2026 (20 anomalies)</div>
+                    <table class="anomaly-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th class="right">Actual Count</th>
+                                <th class="right">Expected</th>
+                                <th class="right">Z-Score</th>
+                                <th class="right">% Difference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>20260101</td>
+                                <td>Thursday</td>
+                                <td class="right">827</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.26</td>
+                                <td class="right severity-high">-96.9%</td>
+                            </tr>
+                            <tr>
+                                <td>20260102</td>
+                                <td>Friday</td>
+                                <td class="right">1,090</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.25</td>
+                                <td class="right severity-high">-96.9%</td>
+                            </tr>
+                            <tr>
+                                <td>20260103</td>
+                                <td>Saturday</td>
+                                <td class="right">889</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.21</td>
+                                <td class="right severity-high">-97.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20260104</td>
+                                <td>Sunday</td>
+                                <td class="right">666</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.23</td>
+                                <td class="right severity-high">-98.3%</td>
+                            </tr>
+                            <tr>
+                                <td>20260105</td>
+                                <td>Monday</td>
+                                <td class="right">605</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-high">-97.6%</td>
+                            </tr>
+                            <tr>
+                                <td>20260106</td>
+                                <td>Tuesday</td>
+                                <td class="right">544</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.26</td>
+                                <td class="right severity-high">-97.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20260107</td>
+                                <td>Wednesday</td>
+                                <td class="right">398</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.27</td>
+                                <td class="right severity-high">-98.4%</td>
+                            </tr>
+                            <tr>
+                                <td>20260108</td>
+                                <td>Thursday</td>
+                                <td class="right">523</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.28</td>
+                                <td class="right severity-high">-98.1%</td>
+                            </tr>
+                            <tr>
+                                <td>20260109</td>
+                                <td>Friday</td>
+                                <td class="right">564</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.27</td>
+                                <td class="right severity-high">-98.4%</td>
+                            </tr>
+                            <tr>
+                                <td>20260110</td>
+                                <td>Saturday</td>
+                                <td class="right">631</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.22</td>
+                                <td class="right severity-high">-98.4%</td>
+                            </tr>
+                            <tr>
+                                <td>20260111</td>
+                                <td>Sunday</td>
+                                <td class="right">492</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.24</td>
+                                <td class="right severity-high">-98.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20260112</td>
+                                <td>Monday</td>
+                                <td class="right">491</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-high">-98.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20260113</td>
+                                <td>Tuesday</td>
+                                <td class="right">455</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.26</td>
+                                <td class="right severity-high">-98.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20260114</td>
+                                <td>Wednesday</td>
+                                <td class="right">332</td>
+                                <td class="right">24,894</td>
+                                <td class="right">-1.27</td>
+                                <td class="right severity-high">-98.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20260115</td>
+                                <td>Thursday</td>
+                                <td class="right">554</td>
+                                <td class="right">27,071</td>
+                                <td class="right">-1.28</td>
+                                <td class="right severity-high">-98.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20260116</td>
+                                <td>Friday</td>
+                                <td class="right">709</td>
+                                <td class="right">34,988</td>
+                                <td class="right">-1.26</td>
+                                <td class="right severity-high">-98.0%</td>
+                            </tr>
+                            <tr>
+                                <td>20260117</td>
+                                <td>Saturday</td>
+                                <td class="right">942</td>
+                                <td class="right">39,074</td>
+                                <td class="right">-1.21</td>
+                                <td class="right severity-high">-97.6%</td>
+                            </tr>
+                            <tr>
+                                <td>20260118</td>
+                                <td>Sunday</td>
+                                <td class="right">521</td>
+                                <td class="right">39,048</td>
+                                <td class="right">-1.24</td>
+                                <td class="right severity-high">-98.7%</td>
+                            </tr>
+                            <tr>
+                                <td>20260119</td>
+                                <td>Monday</td>
+                                <td class="right">535</td>
+                                <td class="right">24,891</td>
+                                <td class="right">-1.16</td>
+                                <td class="right severity-high">-97.9%</td>
+                            </tr>
+                            <tr>
+                                <td>20260120</td>
+                                <td>Tuesday</td>
+                                <td class="right">523</td>
+                                <td class="right">23,164</td>
+                                <td class="right">-1.26</td>
+                                <td class="right severity-high">-97.7%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Generated by EZ Links Rounds Data Analysis System</p>
+            <p>Report includes anomalies with z-score &lt; -2.5 or count &lt; 5000</p>
+        </div>
+    </div>
+</body>
+</html>
