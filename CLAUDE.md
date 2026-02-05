@@ -4,217 +4,226 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-EZ Links Rounds Data Analysis - Python tools for querying SQL Server database and analyzing ezlrounds data for anomalies. The system pulls rounds data from SQL Server, maintains CSV caches, and performs statistical anomaly detection based on year-over-year comparison across multiple configurable queries.
+**Data Pipeline Validation System** - A data quality validation platform for monitoring data pipelines through automated testing. Currently in MVP phase with volume tests implemented.
+
+**Key Documents**:
+- **README_MVP.md** - Quick start guide
+- **PRD.md** - Complete product requirements and planned test type specifications
+- **ARCHITECTURE.md** - Technical architecture and database schemas
+- **AGENTS.md** - Multi-agent framework specification (planned)
 
 ## Architecture
 
-**Core Components:**
+The system follows a **microservices-inspired architecture** with CQRS pattern:
 
-1. **config.py** - Database credentials only
-   - `SERVER`, `DATABASE`, `USE_WINDOWS_AUTH`, `USERNAME`, `PASSWORD`
-   - No query definitions (moved to queries.json)
-
-2. **queries.json** - Query configuration (gitignored)
-   - Defines multiple SQL queries to track different data dimensions
-   - Each query specifies CSV path, SQL templates, column mappings, anomaly thresholds
-   - Supports custom queries with JOINs, GROUP BY, complex filters
-   - All CSV files stored in `working-dir/` folder
-
-3. **query_loader.py** - Query configuration loader
-   - `load_queries()` function loads and validates queries.json
-   - Validates required fields: name, csv_file, date_column, count_column
-   - Sets defaults for optional fields
-   - Creates working-dir/ if needed
-
-4. **db_query.py** - Database abstraction layer
-   - `EZLinksRoundsDB` class handles all SQL Server connectivity via pyodbc
-   - Supports both Windows and SQL Server authentication
-   - Provides intelligent CSV update (append only new records) vs full refresh
-   - `update_csv()` at db_query.py:208 handles incremental updates
-
-5. **update_and_analyze.py** - Orchestration script
-   - Loads configuration from config.py (credentials only)
-   - Loads queries from queries.json using query_loader
-   - Connects to database once and processes all queries
-   - Subprocess calls past_low_anomalies.py for analysis
-   - Single entry point for the full workflow
-
-6. **past_low_anomalies.py** - Statistical anomaly detection
-   - Loads queries from queries.json
-   - Analyzes each CSV file independently
-   - Uses year-over-year (YoY) comparison methodology
-   - Flags anomalies based on YoY percentage decrease (default: -50%) or absolute minimum threshold
-   - `find_prior_year_date()` at line 39 matches same day-of-week from prior year
-   - Only analyzes past dates (hardcoded TODAY reference at line 98)
-   - Supports --min-date parameter to filter anomalies by date range (default: 2025-01-01)
-   - Supports --html flag to generate styled HTML reports
-   - Produces consolidated report grouped by query (console or HTML)
-
-7. **html_report.py** - HTML report generator
-   - `generate_html_report()` creates styled HTML output
-   - Features sticky navigation, color-coded severity, print-friendly layout
-   - Severity levels: Severe (<-95%), Moderate (-85% to -95%), Mild (>-85%)
-   - Groups anomalies by query and month with interactive tables
-
-**Data Flow:**
 ```
-config.py (credentials) + queries.json (queries) → query_loader.py →
-SQL Server → EZLinksRoundsDB.update_csv() → working-dir/*.csv →
-past_low_anomalies.py → Console output OR html_report.py → HTML file
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  API Server │────▶│   Redis     │────▶│   Workers   │
+│  (FastAPI)  │     │   Queue     │     │  (Celery)   │
+└─────────────┘     └─────────────┘     └─────────────┘
+       │                                       │
+       ▼                                       ▼
+┌─────────────┐                      ┌─────────────┐
+│  DynamoDB   │                      │ TimescaleDB │
+│  (Config)   │                      │  (Results)  │
+└─────────────┘                      └─────────────┘
 ```
 
-**Configuration System:**
-- `config_template.py` provides structure for database credentials
-- `queries_template.json` provides structure for query definitions
-- User creates `config.py` and `queries.json` (both gitignored)
-- Query definitions include SQL templates, column mappings, anomaly thresholds
-- System performs anomaly analysis across multiple queries simultaneously
+**Dual Database Architecture**:
+- **DynamoDB** stores test configurations, connections, users, audit logs
+- **TimescaleDB** stores time-series test execution results
 
-**Directory Structure:**
-- `working-dir/` - Contains all CSV cache files (gitignored)
-- `reports/` - Contains generated HTML reports (gitignored)
-- Each query maintains its own CSV file in working-dir/
-- CSV files are created automatically on first run
+**Database Connectors**: SQL Server (pyodbc) and PostgreSQL (psycopg2-binary) are implemented. Add new connectors by implementing `BaseConnector` in `workers/connectors/base.py`.
 
 ## Common Commands
 
-**Setup:**
+### Setup and Running
+
 ```bash
-# Install dependencies
+# Setup (AWS Development - uses AWS DynamoDB with local TimescaleDB/Redis)
+./setup.sh  # or: cp .env.example .env && edit AWS_PROFILE
+
+# Start services
+docker-compose up -d                      # AWS hybrid mode
+docker-compose -f docker-compose-local.yml up -d  # Fully local with DynamoDB Local
+
+# Initialize DynamoDB Local tables (required for local mode only)
+python scripts/init_dynamodb.py
+
+# View logs
+docker-compose logs -f
+docker-compose logs -f api
+docker-compose logs -f worker
+```
+
+### Running Without Docker
+
+```bash
+# API server
+uvicorn api.main:app --reload --port 8000
+
+# Celery worker
+celery -A workers.celery_app worker --loglevel=info --concurrency=4
+```
+
+### Testing
+
+```bash
 pip install -r requirements.txt
 
-# Install ODBC Driver (macOS)
-brew install microsoft/mssql-release/msodbcsql17
+# Run all tests
+pytest tests/
 
-# Configure database connection
-cp config_template.py config.py
-# Edit config.py with your database credentials
+# Run with coverage
+pytest tests/ --cov=api --cov=workers
 
-# Configure queries
-cp queries_template.json queries.json
-# Edit queries.json with your SQL queries
+# Run specific test file with verbose output
+pytest tests/test_volume_executor.py -v
+
+# Code quality
+black . && flake8 . && mypy .
 ```
 
-**Main workflow:**
+### API Usage (port 8001 externally)
+
 ```bash
-# Update CSVs from database and run analysis (default: all queries)
-python3 update_and_analyze.py
+# API docs
+open http://localhost:8001/docs
 
-# Update specific query only
-python3 update_and_analyze.py --query ezlinks_rounds
+# Create connection
+curl -X POST http://localhost:8001/v1/connections -H "Content-Type: application/json" -d @examples/connection.json
 
-# Update multiple specific queries
-python3 update_and_analyze.py --query query1 --query query2
+# Create test
+curl -X POST http://localhost:8001/v1/tests -H "Content-Type: application/json" -d @examples/volume_test.json
 
-# Get data from specific start date
-python3 update_and_analyze.py --start-date 20240101
+# Run test
+curl -X POST http://localhost:8001/v1/tests/{test_id}/run
 
-# Full refresh instead of incremental update
-python3 update_and_analyze.py --refresh --start-date 20240101
+# View executions
+curl http://localhost:8001/v1/executions?test_id={test_id}
 
-# Combine query filter with date range
-python3 update_and_analyze.py --query ezlinks_rounds --start-date 20240101 --end-date 20241231
+# Dashboard summary
+curl http://localhost:8001/v1/dashboard/summary
 ```
 
-**Individual operations:**
+### Database Operations
+
 ```bash
-# Run anomaly analysis only (on existing CSVs, console output)
-python3 past_low_anomalies.py
+# DynamoDB Local
+aws dynamodb list-tables --endpoint-url http://localhost:8000
+aws dynamodb scan --table-name Tests --endpoint-url http://localhost:8000
 
-# Generate HTML report
-python3 past_low_anomalies.py --html
+# TimescaleDB
+docker exec -it dataquality-timescaledb psql -U dataquality -d dataquality_results
+docker exec -it dataquality-timescaledb psql -U dataquality -d dataquality_results -c "SELECT * FROM test_executions ORDER BY started_at DESC LIMIT 5;"
 
-# Custom HTML filename and date filter
-python3 past_low_anomalies.py --html --output reports/my_report.html --min-date 2023-01-01
-
-# Test query configuration
-python3 query_loader.py
-
-# Direct database operations (edit db_query.py main() function first)
-python3 db_query.py
+# Redis
+redis-cli -h localhost LLEN celery
 ```
 
-## Key Design Decisions
+### Terraform Deployment (AWS)
 
-**Multi-query architecture:** queries.json allows defining multiple data sources to track different dimensions (e.g., rounds by course, membership tier, region). Each query maintains its own CSV cache and statistical baseline. Anomaly analysis runs across all queries to provide comprehensive insights.
+```bash
+cd terraform
+terraform init
+cp terraform.tfvars.example terraform.tfvars  # Set rds_master_password
+terraform plan
+terraform apply
+```
 
-**CSV-based caching:** The system maintains separate CSV files for each query in working-dir/. `update_csv()` reads the latest date in each CSV and queries only newer records, then appends them. This avoids re-downloading historical data on each run.
+## Code Structure
 
-**Year-over-year comparison:** Anomaly detection uses year-over-year (YoY) comparison methodology. For each date, the system finds the corresponding date from the prior year (matching the same day of week within the same approximate week) and calculates the percentage change. Anomalies are flagged when the YoY decrease exceeds the threshold (default: -50%) OR when the count falls below the absolute minimum threshold. This methodology accounts for seasonal patterns while detecting significant drops in activity.
+```
+api/
+├── main.py              # FastAPI entry point
+├── config.py            # Environment configuration (pydantic-settings)
+├── routers/             # API endpoints (tests.py, executions.py, dashboard.py)
+├── models/              # Pydantic models (test_config.py)
+└── services/            # Business logic (dynamodb_client.py, timescaledb_client.py)
 
-**Date format support:** The system supports both YYYYMMDD (integer, e.g., 20240101 from FactBooking.playdatekey) and YYYY-MM-DD (date string, e.g., 2024-01-01 from DimCustomer.CustomerCreatedDate). All dates are normalized to YYYYMMDD format in reports via parse_date() at past_low_anomalies.py:16.
+workers/
+├── celery_app.py        # Celery configuration
+├── executors/           # Test execution logic (volume_test.py)
+├── connectors/          # Database connectors (base.py, sqlserver.py, postgres.py)
+└── utils/               # Utilities (alert_sender.py)
 
-**Selective query processing:** update_and_analyze.py supports --query parameter to process specific queries instead of all queries. This is useful for quickly updating a single data source or testing configuration changes without processing everything.
+scripts/
+├── init_dynamodb.py     # Creates DynamoDB tables
+└── init_timescaledb.sql # Creates TimescaleDB schema
+```
 
-**Query separation:** Database credentials are in config.py (server, auth), while query definitions are in queries.json (SQL, columns, thresholds). This separation allows sharing config_template.py while keeping sensitive table names private.
+## Key Implementation Patterns
 
-**Date filtering:** The database query layer builds WHERE clauses dynamically based on start_date/end_date parameters. Custom queries can override this with FILTERED_QUERY template that includes a {where_clause} placeholder.
+### Test Execution Flow
 
-**Authentication flexibility:** The ODBC connection string switches between `Trusted_Connection=yes` (Windows auth) and `UID/PWD` (SQL auth) based on `use_windows_auth` flag. Both use `TrustServerCertificate=yes` for SSL compatibility.
+1. `POST /v1/tests/{test_id}/run` triggers test
+2. API publishes task to Redis via `workers.celery_app.execute_test_task`
+3. Celery worker loads test config from DynamoDB
+4. Worker creates connector and executes query (read-only)
+5. Worker evaluates results against thresholds
+6. Worker stores results in TimescaleDB `test_executions` table
+7. Worker sends email alerts on failure via `workers/utils/alert_sender.py`
 
-**Working directory:** All CSV files are stored in `working-dir/` folder to keep the repository root clean. The folder is gitignored to avoid committing large data files.
+### Adding New Test Types
 
-**HTML reporting:** past_low_anomalies.py can generate styled HTML reports with --html flag. Reports are saved to `reports/` directory (default: reports/anomaly_report.html). Reports include sticky navigation, color-coded severity levels, executive summary, and print-friendly layout. The reports/ directory is gitignored.
+1. Create executor in `workers/executors/` following `volume_test.py` pattern
+2. Create Celery task in `workers/tasks/`
+3. Add Pydantic models in `api/models/test_config.py`
+4. Reference PRD.md sections 3.1.2-3.1.6 for specifications
 
-## Configuration Files
+### Adding New Database Connectors
 
-**config.py** contains database credentials only:
-- SERVER, DATABASE, USE_WINDOWS_AUTH, USERNAME, PASSWORD
+1. Create connector in `workers/connectors/` implementing `BaseConnector`
+2. Register in `workers/connectors/__init__.py` `get_connector()`
+3. Add driver to `requirements.txt`
 
-**queries.json** defines multiple data queries (gitignored):
-- Each query entry specifies SQL templates, column mappings, CSV output path
-- `name` - Unique query identifier
-- `description` - Human-readable description
-- `csv_file` - Path to CSV cache (in working-dir/)
-- `date_column` and `count_column` - Column names in query results
-- `base_query`, `filtered_query`, `max_date_query`, `order_by` - SQL templates
-- `anomaly_threshold_z` and `anomaly_threshold_min` - Detection thresholds
-- Custom queries support JOINs, subqueries, aggregations, complex filters
-- The {where_clause} placeholder in FILTERED_QUERY gets auto-populated with date filters
-- Multiple queries enable tracking different metrics simultaneously
+## Configuration
 
-## Important Implementation Details
+### Port Mappings
 
-**query_loader.py:**
-- `load_queries()` at query_loader.py:12 loads and validates queries.json
-- Ensures required fields are present: name, csv_file, date_column, count_column
-- Sets defaults for optional fields: base_query, filtered_query, order_by, thresholds
-- Creates working-dir/ if it doesn't exist
-- Returns list of validated query dictionaries
+- **API**: http://localhost:8001 (external), port 8000 internal
+- **DynamoDB Local**: http://localhost:8000 (only with docker-compose-local.yml)
+- **TimescaleDB**: localhost:5432
+- **Redis**: localhost:6379
 
-**db_query.py:**
-- Connection is established lazily in query methods if not already connected
-- `query_rounds_data()` at db_query.py:68 builds SQL dynamically based on parameters
-- `update_csv()` at db_query.py:208 handles both initial creation and incremental updates
-- Results are always returned as list of dicts with keys 'playdatekey' and 'count'
+### AWS Authentication Modes (checked in order)
 
-**update_and_analyze.py:**
-- Loads database credentials from config.py
-- Loads queries from queries.json using query_loader
-- Supports --query parameter to process specific queries (line 164)
-- Supports --start-date, --end-date, and --refresh parameters
-- Connects to database once and processes all (or selected) queries sequentially
-- Uses subprocess to call past_low_anomalies.py (line 126) for console output
-- Returns exit code 0 on success, 1 on failure for scripting
+1. `DYNAMODB_ENDPOINT` - DynamoDB Local
+2. `AWS_PROFILE` - AWS profile from ~/.aws/credentials
+3. `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` - Explicit credentials
+4. Default credentials - IAM role or environment
 
-**past_low_anomalies.py:**
-- TODAY constant at line 98 defines current date for filtering future dates
-- `parse_date()` at line 16 handles both YYYYMMDD and YYYY-MM-DD formats
-- `find_prior_year_date()` at line 39 finds corresponding date from prior year (same day-of-week)
-- `analyze_csv()` at line 76 processes a single CSV file using YoY comparison
-- Supports --min-date parameter (default: 2025-01-01) to filter historical anomalies
-- Supports --html flag to generate HTML report via html_report.py
-- Anomaly threshold: yoy_pct <= -50% OR count < threshold_min (line 184)
-- `print_anomalies()` at line 202 formats console output grouped by year/month
-- Output formatting includes count, prior year count, YoY change, and YoY percentage
-- Produces consolidated report with summary across all queries
+### Key Environment Variables
 
-**html_report.py:**
-- `generate_html_report()` at line 10 creates styled HTML from anomaly data
-- Accepts anomalies_by_query dictionary mapping query names to anomaly lists
-- Generates executive summary with total anomalies and averages
-- Creates sticky navigation for quick jumping between query sections
-- Color codes severity: Severe (<-95%, red), Moderate (-85% to -95%, orange), Mild (>-85%, yellow)
-- Groups anomalies by year-month within each query section
-- Responsive design with hover effects and smooth scrolling
-- Print-friendly CSS (hides navigation, optimizes layout)
+```bash
+AWS_PROFILE=your_profile        # For AWS DynamoDB
+DYNAMODB_ENDPOINT=http://localhost:8000  # For DynamoDB Local
+RESULTS_DB_URL=postgresql://dataquality:password@localhost:5432/dataquality_results
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+```
+
+## Troubleshooting
+
+- **DynamoDB tables not found**: Run `python scripts/init_dynamodb.py` (local mode only)
+- **Worker not processing**: Check `docker-compose logs -f worker` and `redis-cli -h localhost LLEN celery`
+- **API errors**: Check `docker-compose logs -f api`
+- **SQL Server**: Requires ODBC driver - macOS: `brew install unixodbc`
+
+## What's Implemented vs Planned
+
+**Implemented (MVP)**:
+- Volume test executor
+- SQL Server and PostgreSQL connectors
+- FastAPI REST API
+- DynamoDB + TimescaleDB storage
+- Celery async execution
+- Email alerts
+- Terraform AWS deployment
+
+**Planned** (see PRD.md):
+- Distribution, Uniqueness, Referential, Pattern, Freshness tests
+- Test scheduling (cron-based)
+- Slack/PagerDuty integrations
+- React dashboard
+- Authentication/RBAC
