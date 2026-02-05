@@ -4,226 +4,76 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Data Pipeline Validation System** - A data quality validation platform for monitoring data pipelines through automated testing. Currently in MVP phase with volume tests implemented.
-
-**Key Documents**:
-- **README_MVP.md** - Quick start guide
-- **PRD.md** - Complete product requirements and planned test type specifications
-- **ARCHITECTURE.md** - Technical architecture and database schemas
-- **AGENTS.md** - Multi-agent framework specification (planned)
+Data Anomaly Detector - Python tools for querying SQL Server database and analyzing data for anomalies. The system pulls data from SQL Server, maintains CSV caches, and performs statistical anomaly detection based on year-over-year comparison across multiple configurable queries.
 
 ## Architecture
 
-The system follows a **microservices-inspired architecture** with CQRS pattern:
-
+**Data Flow:**
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  API Server │────▶│   Redis     │────▶│   Workers   │
-│  (FastAPI)  │     │   Queue     │     │  (Celery)   │
-└─────────────┘     └─────────────┘     └─────────────┘
-       │                                       │
-       ▼                                       ▼
-┌─────────────┐                      ┌─────────────┐
-│  DynamoDB   │                      │ TimescaleDB │
-│  (Config)   │                      │  (Results)  │
-└─────────────┘                      └─────────────┘
+config.py (credentials) + queries.json (queries) → query_loader.py →
+SQL Server → EZLinksRoundsDB.update_csv() → working-dir/*.csv →
+past_low_anomalies.py → Console output OR html_report.py → HTML file
 ```
 
-**Dual Database Architecture**:
-- **DynamoDB** stores test configurations, connections, users, audit logs
-- **TimescaleDB** stores time-series test execution results
+**Core Components:**
 
-**Database Connectors**: SQL Server (pyodbc) and PostgreSQL (psycopg2-binary) are implemented. Add new connectors by implementing `BaseConnector` in `workers/connectors/base.py`.
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `config.py` | Database credentials (gitignored) | SERVER, DATABASE, USE_WINDOWS_AUTH |
+| `queries.json` | Query definitions (gitignored) | SQL templates, column mappings, thresholds |
+| `query_loader.py` | Validates queries.json | `load_queries()` at line 11 |
+| `db_query.py` | SQL Server via pyodbc | `EZLinksRoundsDB.update_csv()` at line 208 |
+| `update_and_analyze.py` | Orchestration script | Main entry point, subprocess calls analysis |
+| `past_low_anomalies.py` | YoY anomaly detection | `analyze_csv()` at line 76, `find_prior_year_date()` at line 39 |
+| `html_report.py` | HTML report generator | `generate_html_report()` at line 10 |
+
+**Gitignored directories:**
+- `working-dir/` - CSV cache files (one per query)
+- `reports/` - Generated HTML reports
 
 ## Common Commands
 
-### Setup and Running
-
 ```bash
-# Setup (AWS Development - uses AWS DynamoDB with local TimescaleDB/Redis)
-./setup.sh  # or: cp .env.example .env && edit AWS_PROFILE
-
-# Start services
-docker-compose up -d                      # AWS hybrid mode
-docker-compose -f docker-compose-local.yml up -d  # Fully local with DynamoDB Local
-
-# Initialize DynamoDB Local tables (required for local mode only)
-python scripts/init_dynamodb.py
-
-# View logs
-docker-compose logs -f
-docker-compose logs -f api
-docker-compose logs -f worker
-```
-
-### Running Without Docker
-
-```bash
-# API server
-uvicorn api.main:app --reload --port 8000
-
-# Celery worker
-celery -A workers.celery_app worker --loglevel=info --concurrency=4
-```
-
-### Testing
-
-```bash
+# Setup
 pip install -r requirements.txt
+brew install microsoft/mssql-release/msodbcsql17  # macOS ODBC driver
+cp config_template.py config.py && cp queries_template.json queries.json
 
-# Run all tests
-pytest tests/
+# Main workflow - update CSVs and analyze
+python3 update_and_analyze.py                           # All queries, incremental
+python3 update_and_analyze.py --query myquery           # Single query
+python3 update_and_analyze.py --start-date 20240101     # From specific date
+python3 update_and_analyze.py --refresh --start-date 20240101  # Full refresh
 
-# Run with coverage
-pytest tests/ --cov=api --cov=workers
-
-# Run specific test file with verbose output
-pytest tests/test_volume_executor.py -v
-
-# Code quality
-black . && flake8 . && mypy .
+# Analysis only (no database update)
+python3 past_low_anomalies.py                           # Console output
+python3 past_low_anomalies.py --html                    # HTML report
+python3 past_low_anomalies.py --html --min-date 2024-01-01  # Custom date filter
 ```
 
-### API Usage (port 8001 externally)
+## Key Design Decisions
 
-```bash
-# API docs
-open http://localhost:8001/docs
+**Year-over-year comparison:** Anomaly detection compares each date to the same day-of-week from the prior year. Anomalies flagged when: YoY decrease >= 50% OR count < absolute minimum threshold. This accounts for seasonal patterns.
 
-# Create connection
-curl -X POST http://localhost:8001/v1/connections -H "Content-Type: application/json" -d @examples/connection.json
+**CSV caching:** `update_csv()` reads latest date in CSV, queries only newer records, appends. Avoids re-downloading history on each run.
 
-# Create test
-curl -X POST http://localhost:8001/v1/tests -H "Content-Type: application/json" -d @examples/volume_test.json
+**Multi-query architecture:** queries.json defines multiple data sources (e.g., rounds by course, tier, region). Each maintains separate CSV cache and thresholds.
 
-# Run test
-curl -X POST http://localhost:8001/v1/tests/{test_id}/run
+**Date format support:** Handles both YYYYMMDD (int) and YYYY-MM-DD (string) via `parse_date()` at past_low_anomalies.py:16.
 
-# View executions
-curl http://localhost:8001/v1/executions?test_id={test_id}
-
-# Dashboard summary
-curl http://localhost:8001/v1/dashboard/summary
-```
-
-### Database Operations
-
-```bash
-# DynamoDB Local
-aws dynamodb list-tables --endpoint-url http://localhost:8000
-aws dynamodb scan --table-name Tests --endpoint-url http://localhost:8000
-
-# TimescaleDB
-docker exec -it dataquality-timescaledb psql -U dataquality -d dataquality_results
-docker exec -it dataquality-timescaledb psql -U dataquality -d dataquality_results -c "SELECT * FROM test_executions ORDER BY started_at DESC LIMIT 5;"
-
-# Redis
-redis-cli -h localhost LLEN celery
-```
-
-### Terraform Deployment (AWS)
-
-```bash
-cd terraform
-terraform init
-cp terraform.tfvars.example terraform.tfvars  # Set rds_master_password
-terraform plan
-terraform apply
-```
-
-## Code Structure
-
-```
-api/
-├── main.py              # FastAPI entry point
-├── config.py            # Environment configuration (pydantic-settings)
-├── routers/             # API endpoints (tests.py, executions.py, dashboard.py)
-├── models/              # Pydantic models (test_config.py)
-└── services/            # Business logic (dynamodb_client.py, timescaledb_client.py)
-
-workers/
-├── celery_app.py        # Celery configuration
-├── executors/           # Test execution logic (volume_test.py)
-├── connectors/          # Database connectors (base.py, sqlserver.py, postgres.py)
-└── utils/               # Utilities (alert_sender.py)
-
-scripts/
-├── init_dynamodb.py     # Creates DynamoDB tables
-└── init_timescaledb.sql # Creates TimescaleDB schema
-```
-
-## Key Implementation Patterns
-
-### Test Execution Flow
-
-1. `POST /v1/tests/{test_id}/run` triggers test
-2. API publishes task to Redis via `workers.celery_app.execute_test_task`
-3. Celery worker loads test config from DynamoDB
-4. Worker creates connector and executes query (read-only)
-5. Worker evaluates results against thresholds
-6. Worker stores results in TimescaleDB `test_executions` table
-7. Worker sends email alerts on failure via `workers/utils/alert_sender.py`
-
-### Adding New Test Types
-
-1. Create executor in `workers/executors/` following `volume_test.py` pattern
-2. Create Celery task in `workers/tasks/`
-3. Add Pydantic models in `api/models/test_config.py`
-4. Reference PRD.md sections 3.1.2-3.1.6 for specifications
-
-### Adding New Database Connectors
-
-1. Create connector in `workers/connectors/` implementing `BaseConnector`
-2. Register in `workers/connectors/__init__.py` `get_connector()`
-3. Add driver to `requirements.txt`
+**Authentication:** ODBC switches between Windows auth (`Trusted_Connection=yes`) and SQL auth (`UID/PWD`) based on `use_windows_auth` flag.
 
 ## Configuration
 
-### Port Mappings
+**queries.json required fields:**
+- `name`, `csv_file`, `date_column`, `count_column`
 
-- **API**: http://localhost:8001 (external), port 8000 internal
-- **DynamoDB Local**: http://localhost:8000 (only with docker-compose-local.yml)
-- **TimescaleDB**: localhost:5432
-- **Redis**: localhost:6379
+**queries.json optional fields:**
+- `base_query`, `filtered_query` (with `{where_clause}` placeholder), `max_date_query`, `order_by`
+- `anomaly_threshold_z` (default: -2.5), `anomaly_threshold_min` (default: 5000)
 
-### AWS Authentication Modes (checked in order)
+## Implementation Notes
 
-1. `DYNAMODB_ENDPOINT` - DynamoDB Local
-2. `AWS_PROFILE` - AWS profile from ~/.aws/credentials
-3. `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` - Explicit credentials
-4. Default credentials - IAM role or environment
+**Hardcoded dates:** The TODAY constant appears at past_low_anomalies.py:98 and :269. Update when needed for testing.
 
-### Key Environment Variables
-
-```bash
-AWS_PROFILE=your_profile        # For AWS DynamoDB
-DYNAMODB_ENDPOINT=http://localhost:8000  # For DynamoDB Local
-RESULTS_DB_URL=postgresql://dataquality:password@localhost:5432/dataquality_results
-REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=redis://localhost:6379/0
-```
-
-## Troubleshooting
-
-- **DynamoDB tables not found**: Run `python scripts/init_dynamodb.py` (local mode only)
-- **Worker not processing**: Check `docker-compose logs -f worker` and `redis-cli -h localhost LLEN celery`
-- **API errors**: Check `docker-compose logs -f api`
-- **SQL Server**: Requires ODBC driver - macOS: `brew install unixodbc`
-
-## What's Implemented vs Planned
-
-**Implemented (MVP)**:
-- Volume test executor
-- SQL Server and PostgreSQL connectors
-- FastAPI REST API
-- DynamoDB + TimescaleDB storage
-- Celery async execution
-- Email alerts
-- Terraform AWS deployment
-
-**Planned** (see PRD.md):
-- Distribution, Uniqueness, Referential, Pattern, Freshness tests
-- Test scheduling (cron-based)
-- Slack/PagerDuty integrations
-- React dashboard
-- Authentication/RBAC
+**HTML severity levels:** Severe (<-95%, red), Moderate (-85% to -95%, orange), Mild (>-85%, yellow)
