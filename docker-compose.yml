@@ -1,0 +1,90 @@
+services:
+  # TimescaleDB for results storage
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: dataquality-timescaledb
+    environment:
+      - POSTGRES_DB=dataquality_results
+      - POSTGRES_USER=dataquality
+      - POSTGRES_PASSWORD=dataquality_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+      - ./scripts/init_timescaledb.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Redis for caching and message queue
+  redis:
+    image: redis:7-alpine
+    container_name: dataquality-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  # API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: dataquality-api
+    ports:
+      - "8001:8000"
+    environment:
+      - ENV=development
+      - AWS_REGION=us-east-1
+      - AWS_PROFILE=527814729106_snisb_IsbAdminsPS
+      - RESULTS_DB_URL=postgresql://dataquality:dataquality_dev_password@timescaledb:5432/dataquality_results
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - JWT_SECRET_KEY=dev-jwt-secret-key-change-in-production
+    depends_on:
+      - timescaledb
+      - redis
+    volumes:
+      - ./api:/app/api
+      - ./workers:/app/workers
+      - ./.env:/app/.env
+      - ~/.aws:/root/.aws:ro  # Mount AWS credentials for profile authentication
+    command: uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: dataquality-worker
+    environment:
+      - ENV=development
+      - AWS_REGION=us-east-1
+      - AWS_PROFILE=527814729106_snisb_IsbAdminsPS
+      - RESULTS_DB_URL=postgresql://dataquality:dataquality_dev_password@timescaledb:5432/dataquality_results
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+      - timescaledb
+    volumes:
+      - ./workers:/app/workers
+      - ./api:/app/api
+      - ./.env:/app/.env
+      - ~/.aws:/root/.aws:ro  # Mount AWS credentials for profile authentication
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=4
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dataquality-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  timescaledb-data:
+  redis-data:
