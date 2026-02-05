@@ -15,17 +15,25 @@ SQL Server → EZLinksRoundsDB.update_csv() → working-dir/*.csv →
 past_low_anomalies.py → Console output OR html_report.py → HTML file
 ```
 
-**Core Components:**
+**Core Components (in `scripts/` folder):**
 
 | File | Purpose | Key Functions |
 |------|---------|---------------|
-| `config.py` | Database credentials (gitignored) | SERVER, DATABASE, USE_WINDOWS_AUTH |
-| `queries.json` | Query definitions (gitignored) | SQL templates, column mappings, thresholds |
-| `query_loader.py` | Validates queries.json | `load_queries()` at line 11 |
 | `db_query.py` | SQL Server via pyodbc | `EZLinksRoundsDB.update_csv()` at line 208 |
-| `update_and_analyze.py` | Orchestration script | Main entry point, subprocess calls analysis |
-| `past_low_anomalies.py` | YoY anomaly detection | `analyze_csv()` at line 76, `find_prior_year_date()` at line 39 |
+| `query_loader.py` | Validates queries.json | `load_queries()` at line 11 |
 | `html_report.py` | HTML report generator | `generate_html_report()` at line 10 |
+| `update_and_analyze.py` | Orchestration: DB update + analysis | Main entry point |
+| `past_low_anomalies.py` | YoY anomaly detection engine | `analyze_csv()`, `find_prior_year_date()` |
+| `run_analysis.sh` | One-command setup and run | Bash script |
+
+**Config files (in root):**
+
+| File | Purpose |
+|------|---------|
+| `config.py` | Database credentials (gitignored) |
+| `config_template.py` | Template for config.py |
+| `queries.json` | Query definitions (gitignored) |
+| `queries_template.json` | Template for queries.json |
 
 **Gitignored directories:**
 - `working-dir/` - CSV cache files (one per query)
@@ -39,16 +47,19 @@ pip install -r requirements.txt
 brew install microsoft/mssql-release/msodbcsql17  # macOS ODBC driver
 cp config_template.py config.py && cp queries_template.json queries.json
 
+# One-command setup and run (recommended)
+./scripts/run_analysis.sh
+
 # Main workflow - update CSVs and analyze
-python3 update_and_analyze.py                           # All queries, incremental
-python3 update_and_analyze.py --query myquery           # Single query
-python3 update_and_analyze.py --start-date 20240101     # From specific date
-python3 update_and_analyze.py --refresh --start-date 20240101  # Full refresh
+python3 scripts/update_and_analyze.py                           # All queries, incremental
+python3 scripts/update_and_analyze.py --query myquery           # Single query
+python3 scripts/update_and_analyze.py --start-date 20240101     # From specific date
+python3 scripts/update_and_analyze.py --refresh --start-date 20240101  # Full refresh
 
 # Analysis only (no database update)
-python3 past_low_anomalies.py                           # Console output
-python3 past_low_anomalies.py --html                    # HTML report
-python3 past_low_anomalies.py --html --min-date 2024-01-01  # Custom date filter
+python3 scripts/past_low_anomalies.py                           # Console output
+python3 scripts/past_low_anomalies.py --html                    # HTML report
+python3 scripts/past_low_anomalies.py --html --min-date 2024-01-01  # Custom date filter
 ```
 
 ## Key Design Decisions
@@ -74,6 +85,6 @@ python3 past_low_anomalies.py --html --min-date 2024-01-01  # Custom date filter
 
 ## Implementation Notes
 
-**Hardcoded dates:** The TODAY constant appears at past_low_anomalies.py:98 and :269. Update when needed for testing.
+**Hardcoded dates:** The TODAY constant appears at scripts/past_low_anomalies.py:104 and :275. Update when needed for testing.
 
 **HTML severity levels:** Severe (<-95%, red), Moderate (-85% to -95%, orange), Mild (>-85%, yellow)

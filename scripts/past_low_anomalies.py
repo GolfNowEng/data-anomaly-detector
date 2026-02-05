@@ -10,6 +10,13 @@ import argparse
 from datetime import datetime, timedelta
 from collections import defaultdict
 import statistics
+
+# Setup paths
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+sys.path.insert(0, SCRIPT_DIR)  # For query_loader, html_report imports
+os.chdir(ROOT_DIR)              # For relative paths (queries.json, working-dir/)
+
 from query_loader import load_queries
 
 

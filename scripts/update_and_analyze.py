@@ -4,7 +4,16 @@ Update data from database and run anomaly analysis across multiple queries.
 """
 
 import sys
+import os
 import argparse
+
+# Setup paths
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+sys.path.insert(0, SCRIPT_DIR)  # For db_query, query_loader imports
+sys.path.insert(0, ROOT_DIR)    # For config import
+os.chdir(ROOT_DIR)              # For relative paths (queries.json, working-dir/)
+
 from db_query import EZLinksRoundsDB
 from query_loader import load_queries
 
@@ -123,7 +132,7 @@ def update_and_analyze(server: str, database: str,
 
     # Run the anomaly analysis (from past_low_anomalies.py)
     import subprocess
-    result = subprocess.run(['python3', 'past_low_anomalies.py'],
+    result = subprocess.run(['python3', os.path.join(SCRIPT_DIR, 'past_low_anomalies.py')],
                           capture_output=True, text=True)
     print(result.stdout)
 
