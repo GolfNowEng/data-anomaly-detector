@@ -17,6 +17,8 @@ interface RecentExecutionsProps {
 }
 
 export function RecentExecutions({ executions }: RecentExecutionsProps) {
+  const executionList = executions || [];
+
   return (
     <Card>
       <CardHeader>
@@ -33,7 +35,7 @@ export function RecentExecutions({ executions }: RecentExecutionsProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {executions.length === 0 ? (
+            {executionList.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={4}
@@ -43,7 +45,7 @@ export function RecentExecutions({ executions }: RecentExecutionsProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              executions.map((execution) => (
+              executionList.map((execution) => (
                 <TableRow key={execution.execution_id}>
                   <TableCell>
                     <Link

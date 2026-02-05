@@ -10,7 +10,9 @@ interface AlertsPanelProps {
 }
 
 export function AlertsPanel({ alerts }: AlertsPanelProps) {
-  if (alerts.length === 0) {
+  const alertList = alerts || [];
+
+  if (alertList.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -35,12 +37,12 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
           <AlertTriangle className="h-5 w-5 text-red-500" />
           Critical Alerts
           <Badge variant="failed" className="ml-2">
-            {alerts.length}
+            {alertList.length}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {alerts.map((alert) => (
+        {alertList.map((alert) => (
           <Link
             key={alert.execution_id}
             to={`/tests/${alert.test_id}`}

@@ -6,7 +6,8 @@ export function useDashboardSummary() {
   return useQuery({
     queryKey: ['dashboard', 'summary'],
     queryFn: () => apiClient.getDashboardSummary(),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: false, // Disable auto-refresh to prevent errors
+    retry: false,
   });
 }
 
@@ -18,6 +19,7 @@ export function useTests(params?: {
   return useQuery({
     queryKey: ['tests', params],
     queryFn: () => apiClient.getTests(params),
+    retry: false,
   });
 }
 
@@ -26,6 +28,7 @@ export function useTest(testId: string) {
     queryKey: ['tests', testId],
     queryFn: () => apiClient.getTest(testId),
     enabled: !!testId,
+    retry: false,
   });
 }
 
@@ -81,6 +84,7 @@ export function useConnections() {
   return useQuery({
     queryKey: ['connections'],
     queryFn: () => apiClient.getConnections(),
+    retry: false,
   });
 }
 
@@ -92,5 +96,6 @@ export function useExecutions(params?: {
   return useQuery({
     queryKey: ['executions', params],
     queryFn: () => apiClient.getExecutions(params),
+    retry: false,
   });
 }

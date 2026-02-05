@@ -71,8 +71,15 @@ const mockDashboardData = {
 export function Dashboard() {
   const { data, isLoading, error } = useDashboardSummary();
 
-  // Use mock data if API fails or is loading
-  const dashboardData = data || mockDashboardData;
+  // Use mock data if API fails or is loading, with safe defaults
+  const dashboardData = {
+    ...mockDashboardData,
+    ...data,
+    // Ensure arrays are never undefined
+    recent_executions: data?.recent_executions || mockDashboardData.recent_executions,
+    critical_alerts: data?.critical_alerts || mockDashboardData.critical_alerts,
+    trends: data?.trends || mockDashboardData.trends,
+  };
 
   return (
     <div className="flex flex-col h-full">

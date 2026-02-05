@@ -16,6 +16,8 @@ interface TrendsChartProps {
 }
 
 export function TrendsChart({ data }: TrendsChartProps) {
+  const chartData = data || [];
+
   return (
     <Card>
       <CardHeader>
@@ -24,7 +26,7 @@ export function TrendsChart({ data }: TrendsChartProps) {
       <CardContent>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis
                 dataKey="date"

@@ -12,13 +12,15 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      timeout: 5000, // 5 second timeout
     });
 
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
+        // Log but don't crash - let React Query handle the error
         console.error('API Error:', error.response?.data || error.message);
-        throw error;
+        return Promise.reject(error);
       }
     );
   }
